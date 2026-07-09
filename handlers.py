@@ -2,6 +2,9 @@ import logging
 import json
 import time
 import asyncio
+import io
+import os
+from urllib.parse import quote
 from collections import defaultdict
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -20,6 +23,24 @@ from keyboards import (
 )
 from datetime import datetime
 from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
+
+
+def generate_upi_qr(amount: int, note: str = "") -> io.BytesIO:
+    """Generate a QR code image with UPI deep link for exact amount."""
+    import qrcode
+    # UPI deep link format: upi://pay?pa=<UPI_ID>&pn=<UPI_NAME>&am=<AMOUNT>&tn=<NOTE>&cu=INR
+    upi_link = (
+        f"upi://pay?pa={UPI_ID}"
+        f"&pn={quote(UPI_NAME)}"
+        f"&am={amount}.00"
+        f"&tn={quote(note)}"
+        f"&cu=INR"
+    )
+    qr = qrcode.make(upi_link)
+    buf = io.BytesIO()
+    qr.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +275,6 @@ async def tx_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show subscription packages with QR code."""
-    import os
     text = (
         "\U0001f4b3 <b>Buy Access \u2014 Unlimited Lookups</b>\n\n"
         "Choose a package below:\n\n"
@@ -289,11 +309,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Back to main menu
     if data == "back_main":
-        db_user = db.get_or_create_user(user.id, user.username, user.first_name)
-        credits_text = "\u221e" if user.id in ADMIN_IDS else str(db_user['credits'])
+        is_admin_user = user.id in ADMIN_IDS
+        has_access = is_admin_user or db.has_active_subscription(user.id)
+        expiry = db.get_subscription_expiry(user.id)
+        
+        if is_admin_user:
+            status_text = "\u221e Unlimited (Admin)"
+        elif has_access:
+            try:
+                exp_dt = datetime.fromisoformat(expiry)
+                status_text = f"Active until {exp_dt.strftime('%d %b')}"
+            except:
+                status_text = "Active"
+        else:
+            status_text = "No active subscription"
+        
         text = (
             f"\U0001f44b Hey, <b>{user.first_name}</b>!\n\n"
-            f"\U0001f4b0 <b>Your Balance:</b> {credits_text} credits\n\n"
+            f"\U0001f4b0 <b>Status:</b> {status_text}\n\n"
             "Choose an option \u2193"
         )
         try:
@@ -328,7 +361,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
         return
 
-    # Confirm payment - awaiting screenshot
+    # Confirm payment - generate UPI QR with exact amount
     if data.startswith("confirm_"):
         package_key = data.replace("confirm_", "")
         if package_key not in SUBSCRIPTION_PACKAGES:
@@ -336,19 +369,55 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.user_data["awaiting_screenshot"] = package_key
         pkg = SUBSCRIPTION_PACKAGES[package_key]
-        msg_text = (
-            f"\U0001f4f8 <b>Send payment screenshot</b>\n\n"
-            f"You selected: <b>{pkg['label']}</b> (\u20b9{pkg['price']})\n\n"
-            "Upload the payment confirmation screenshot now.\n"
-            "Make sure the screenshot shows:\n"
-            "\u2022 UPI ID paid to\n"
-            "\u2022 Amount\n"
-            "\u2022 Transaction reference/ID"
-        )
+
+        # Generate QR code with exact amount
         try:
-            await query.edit_message_text(msg_text, parse_mode="HTML")
-        except BadRequest:
-            await query.message.reply_text(msg_text, parse_mode="HTML")
+            qr_buf = generate_upi_qr(pkg["price"], note=f"{BRAND_NAME} {pkg['label']}")
+            caption = (
+                f"\U0001f4b3 <b>Scan to Pay - {pkg['label']}</b>\n\n"
+                f"\U0001f4b5 <b>Amount:</b> \u20b9{pkg['price']}\n"
+                f"\U0001f4b0 <b>Access:</b> Unlimited lookups\n"
+                f"\U0001f4c5 <b>Duration:</b> {pkg['label']}\n\n"
+                f"\U0001f4b3 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
+                f"\U0001f464 <b>Name:</b> {UPI_NAME}\n\n"
+                "\U0001f4f8 After payment, <b>send the screenshot</b> of the confirmation below.\n"
+                "Make sure the screenshot shows:\n"
+                "\u2022 UPI ID paid to\n"
+                "\u2022 Amount paid\n"
+                "\u2022 Transaction reference/ID"
+            )
+            # Delete previous message and send QR as photo
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            await context.bot.send_photo(
+                chat_id=query.message.chat.id,
+                photo=qr_buf,
+                caption=caption,
+                reply_markup=back_button(),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error(f"QR generation failed: {e}")
+            # Fallback: send text without QR
+            msg_text = (
+                f"\U0001f4f8 <b>Send payment screenshot</b>\n\n"
+                f"You selected: <b>{pkg['label']}</b> (\u20b9{pkg['price']})\n\n"
+                f"\U0001f4b3 <b>Send payment to:</b>\n"
+                f"<code>{UPI_ID}</code>\n"
+                f"Name: {UPI_NAME}\n"
+                f"Amount: \u20b9{pkg['price']}\n\n"
+                "Upload the payment confirmation screenshot now.\n"
+                "Make sure the screenshot shows:\n"
+                "\u2022 UPI ID paid to\n"
+                "\u2022 Amount\n"
+                "\u2022 Transaction reference/ID"
+            )
+            try:
+                await query.edit_message_text(msg_text, parse_mode="HTML")
+            except BadRequest:
+                await query.message.reply_text(msg_text, parse_mode="HTML")
         return
 
     # Cancel payment
@@ -853,7 +922,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle payment screenshot upload - auto-approve and set subscription."""
+    """Handle payment screenshot upload - creates pending transaction for admin approval."""
     user = update.effective_user
     awaiting = context.user_data.get("awaiting_screenshot")
 
@@ -874,44 +943,61 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Create transaction and auto-approve
+    # Create transaction as pending (admin must approve)
     tx_id = db.create_transaction(user.id, awaiting, pkg["duration_hours"], pkg["price"], screenshot_file_id)
-    db.update_transaction_status(tx_id, "approved")
-    # Set subscription (extends from current expiry if exists)
-    expiry = db.set_subscription(user.id, pkg["duration_hours"])
 
     context.user_data.pop("awaiting_screenshot", None)
     context.user_data.pop("pending_package", None)
 
-    try:
-        exp_dt = datetime.fromisoformat(expiry)
-        expiry_display = exp_dt.strftime('%d %b %Y, %I:%M %p')
-    except:
-        expiry_display = "Active"
-
     await update.message.reply_text(
-        f"\u2705 <b>Payment Approved!</b>\n\n"
+        f"\u23f3 <b>Payment Screenshot Received!</b>\n\n"
         f"Package: <b>{pkg['label']}</b>\n"
         f"Amount: \u20b9{pkg['price']}\n"
-        f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
-        f"\U0001f4c5 Valid until: {expiry_display}\n\n"
-        "You can now use the bot!",
+        f"\U0001f4e2 Transaction ID: <code>#{tx_id}</code>\n\n"
+        "Your payment is being verified by an admin.\n"
+        "You will be notified once it's approved.\n\n"
+        "This usually takes a few minutes.",
         reply_markup=main_menu_keyboard(),
         parse_mode="HTML",
     )
 
-    # Notify admins (for record keeping)
-    from config import ADMIN_IDS
+    # Notify admins with approve/reject buttons
+    from keyboards import admin_approve_keyboard
     for admin_id in ADMIN_IDS:
         try:
-            await context.bot.send_message(
-                admin_id,
-                f"\U0001f4e2 <b>Auto-Approved Payment</b>\n\n"
+            admin_text = (
+                f"\U0001f4e2 <b>New Payment - Pending Approval</b>\n\n"
                 f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
                 f"User ID: <code>{user.id}</code>\n"
                 f"Package: <b>{pkg['label']}</b>\n"
-                f"Unlimited lookups activated until {expiry_display}",
+                f"Amount: \u20b9{pkg['price']}\n"
+                f"Duration: {pkg['label']}\n"
+                f"Transaction: <code>#{tx_id}</code>\n\n"
+                "Review the screenshot and approve or reject:"
+            )
+            await context.bot.send_photo(
+                chat_id=admin_id,
+                photo=screenshot_file_id,
+                caption=admin_text,
+                reply_markup=admin_approve_keyboard(tx_id),
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to notify admin {admin_id}: {e}")
+            # Fallback: text-only notification
+            try:
+                await context.bot.send_message(
+                    admin_id,
+                    f"\U0001f4e2 <b>New Payment - Pending Approval</b>\n\n"
+                    f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
+                    f"User ID: <code>{user.id}</code>\n"
+                    f"Package: <b>{pkg['label']}</b>\n"
+                    f"Amount: \u20b9{pkg['price']}\n"
+                    f"Transaction: <code>#{tx_id}</code>\n"
+                    f"Screenshot file ID: <code>{screenshot_file_id}</code>\n\n"
+                    f"Approve: /approve_{tx_id}\n"
+                    f"Reject: /reject_{tx_id}",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass

@@ -43,7 +43,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"\U0001f465 <b>Total Users:</b> {stats['total_users']}\n"
         f"\U0001f50d <b>Total Lookups:</b> {stats['total_lookups']}\n"
         f"\U0001f4b3 <b>Revenue:</b> \u20b9{stats['total_revenue']}\n"
-        f"\U0001f4b0 <b>Credits Issued:</b> {stats['total_credits_issued']}\n"
+        f"\U0001f4b0 <b>Hours Issued:</b> {stats['total_hours_issued']}\n"
         f"\u23f3 <b>Pending Payments:</b> {stats['pending_transactions']}\n"
     )
     await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
@@ -68,7 +68,7 @@ async def admin_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"User: <code>{tx['user_id']}</code>\n"
             f"Package: <b>{tx['package'].title()}</b>\n"
             f"Amount: \u20b9{tx['amount']}\n"
-            f"Credits: {tx['credits_added']}\n"
+            f"Duration: {tx.get('duration_hours', 0)} hours\n"
             f"Date: {tx['created_at'][:16]}\n"
         )
         if tx.get("screenshot_file_id"):

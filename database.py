@@ -44,7 +44,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             package TEXT,
-            credits_added INTEGER,
+            duration_hours INTEGER,
             amount INTEGER,
             status TEXT DEFAULT 'pending',
             screenshot_file_id TEXT,
@@ -53,6 +53,12 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     """)
+
+    # Migration: rename credits_added to duration_hours if old column exists
+    try:
+        c.execute("ALTER TABLE transactions RENAME COLUMN credits_added TO duration_hours")
+    except sqlite3.OperationalError:
+        pass
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS lookup_log (
@@ -181,12 +187,12 @@ def record_lookup(user_id):
     conn.close()
 
 
-def create_transaction(user_id, package, credits, amount, screenshot_file_id=None):
+def create_transaction(user_id, package, duration_hours, amount, screenshot_file_id=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO transactions (user_id, package, credits_added, amount, screenshot_file_id) VALUES (?, ?, ?, ?, ?)",
-        (user_id, package, credits, amount, screenshot_file_id),
+        "INSERT INTO transactions (user_id, package, duration_hours, amount, screenshot_file_id) VALUES (?, ?, ?, ?, ?)",
+        (user_id, package, duration_hours, amount, screenshot_file_id),
     )
     tx_id = c.lastrowid
     conn.commit()
@@ -351,8 +357,8 @@ def get_stats():
     c.execute("SELECT COUNT(*) as pending FROM transactions WHERE status = 'pending'")
     pending = c.fetchone()["pending"]
 
-    c.execute("SELECT COALESCE(SUM(credits_added), 0) as total_credits FROM transactions WHERE status = 'approved'")
-    total_credits_issued = c.fetchone()["total_credits"]
+    c.execute("SELECT COALESCE(SUM(duration_hours), 0) as total_hours FROM transactions WHERE status = 'approved'")
+    total_hours_issued = c.fetchone()["total_hours"]
 
     conn.close()
     return {
@@ -360,5 +366,5 @@ def get_stats():
         "total_lookups": total_lookups,
         "total_revenue": total_revenue,
         "pending_transactions": pending,
-        "total_credits_issued": total_credits_issued,
+        "total_hours_issued": total_hours_issued,
     }
