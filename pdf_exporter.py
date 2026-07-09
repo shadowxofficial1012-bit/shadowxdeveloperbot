@@ -5,6 +5,7 @@ Dark hacker-themed PDF with colored sections and neon accents.
 
 import io
 import os
+import re
 from fpdf import FPDF
 
 # Load branding from config
@@ -30,10 +31,32 @@ BORDER_COLOR = (50, 50, 70)
 DIVIDER_COLOR = (45, 45, 65)
 
 
+# Regex to strip emoji and other non-ASCII characters not supported by Courier font
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F300-\U0001F5FF"  # Misc symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # Transport & map symbols
+    "\U0001F1E0-\U0001F1FF"  # Flags
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U000024C2-\U0001F251"  # Enclosed characters
+    "\U0001F900-\U0001F9FF"  # Supplemental symbols & pictographs
+    "\U0001FA00-\U0001FA6F"  # Chess symbols
+    "\U0001FA70-\U0001FAFF"  # Symbols extended-A
+    "\U00002600-\U000026FF"  # Misc symbols
+    "\U00002B50\U00002764\U0000FE0F\U0000203C\U00002049\U000020A0-\U000020CF"  # Common emoji ranges
+    "]+", flags=re.UNICODE
+)
+
+
 def safe_str(val, default="N/A") -> str:
+    """Safely convert a value to string, stripping emoji that Courier font cannot render."""
     if val is None or val == "":
         return default
-    return str(val)
+    result = str(val)
+    # Strip emoji characters not supported by Courier font
+    result = _EMOJI_PATTERN.sub("", result)
+    return result if result else default
 
 
 class OSINTReportPDF(FPDF):
