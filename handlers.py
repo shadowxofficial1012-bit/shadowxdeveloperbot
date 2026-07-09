@@ -676,7 +676,6 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not result_num["success"] and not result_leak["success"]:
         await loading_msg.edit_text(
             f"\u274c <b>Lookup Failed</b>\n\nError: {result_num.get('error', 'Unknown error')}\n\nPlease try again later.",
-            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return
@@ -689,7 +688,6 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await loading_msg.edit_text(
             f"\u274c <b>No data found</b> for <code>{phone_number}</code>.\n\n"
             "The number may not exist in the database or the API is unavailable.",
-            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return
@@ -698,7 +696,6 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not db.use_credit(user.id):
         await loading_msg.edit_text(
             "\u26a0\ufe0f <b>Credits exhausted</b> during lookup.\nBuy more credits.",
-            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return
