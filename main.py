@@ -20,6 +20,7 @@ from handlers import (
     handle_callback,
     handle_lookup,
     handle_screenshot,
+    demo_result,
 )
 from admin import (
     admin_start,
@@ -70,6 +71,7 @@ async def handle_text(update: Update, context):
         "\U0001f4cb My History": "history",
         "\U0001f4dd Help": "help",
         "\U0001f464 Profile": "profile",
+        "\U0001f4ca Demo Result": "demo",
     }
 
     if text in routes:
@@ -92,6 +94,8 @@ async def handle_text(update: Update, context):
             await help_command(update, context)
         elif route == "profile":
             await profile(update, context)
+        elif route == "demo":
+            await demo_result(update, context)
         return
 
     # Admin buttons
@@ -154,6 +158,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("admin", admin_start))
+    app.add_handler(CommandHandler("demo", demo_result))
 
     # Callback handler (inline buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))

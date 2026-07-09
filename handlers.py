@@ -109,20 +109,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Header image failed: {e}")
 
     # Send welcome text
+    is_admin_user = user.id in ADMIN_IDS
     welcome = (
         f"\U0001f44b Welcome, <b>{user.first_name}</b>!\n\n"
-        f"\U0001f50d <b>{BRAND_NAME}</b>\n"
+        f"\U0001f50d <b>Phone OSINT by @HATHI02</b>\n"
         "Get detailed information about any phone number.\n\n"
     )
 
     if is_new:
         welcome += f"\U0001f381 You received <b>{FREE_CREDITS} FREE credits</b> to get started!\n\n"
 
-    credits_display = "\u221e Unlimited" if user.id in ADMIN_IDS else str(db_user['credits'])
+    credits_display = "\u221e Unlimited" if is_admin_user else str(db_user['credits'])
     welcome += (
         f"\U0001f4b0 <b>Your Balance:</b> {credits_display} credits\n\n"
-        "Choose an option below \u2193"
     )
+
+    if is_admin_user:
+        welcome += "\U0001f3f7\ufe0f Admin: Send <code>/admin</code> to access panel\n\n"
+
+    welcome += "Choose an option below \u2193"
 
     await update.message.reply_text(
         welcome,
@@ -133,8 +138,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
+    is_admin_user = update.effective_user.id in ADMIN_IDS
     text = (
-        "\U0001f4d6 <b>How to Use Phone OSINT Bot</b>\n\n"
+        "\U0001f4d6 <b>Phone OSINT Bot by @HATHI02</b>\n\n"
         "\U0001f50d <b>Phone Lookup</b>\n"
         "1. Tap 'Phone Lookup' button\n"
         "2. Enter the phone number (e.g., 9876543210)\n"
@@ -144,14 +150,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2. Choose a package\n"
         "3. Send payment to the UPI ID shown\n"
         "4. Upload payment screenshot\n"
-        "5. Wait for admin approval\n\n"
+        "5. Credits added instantly!\n\n"
         "\U0001f4b0 <b>Check Balance</b>\n"
         "Tap 'My Balance' to see your current credits.\n\n"
         "\U0001f4cb <b>History</b>\n"
         "Tap 'My History' to see your past lookups.\n\n"
         "\U0001f6e1\ufe0f Each lookup costs <b>1 credit</b>.\n\n"
-        "For support, contact admin."
     )
+    if is_admin_user:
+        text += "\U0001f3f7\ufe0f <b>Admin:</b> Send <code>/admin</code> to access panel\n\n"
+    text += "For support, contact @HATHI02."
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
@@ -493,6 +501,70 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML",
             )
         return
+
+
+async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a demo result so users can see how output looks."""
+    from pdf_exporter import generate_text_report, generate_osint_pdf
+    
+    demo_data = {
+        "number": "9876543210",
+        "number_data": {
+            "results": [{
+                "name": "Rahul Kumar",
+                "fname": "Suresh Kumar",
+                "mobile": "9876543210",
+                "alt": "9123456789",
+                "email": "N/A",
+                "circle": "DELHI NCR",
+                "address": "123 MG Road, Connaught Place, New Delhi, Delhi 110001",
+                "id": "DEMO12345"
+            }],
+            "total": 1,
+            "by": "@ftgamer2",
+            "channel": "https://t.me/lynx_api"
+        },
+        "numleak_data": {
+            "calltracer": {
+                "Number": "+91-9876543210",
+                "SIM card": "Jio (Reliance Jio Infocomm Limited)",
+                "Mobile State": "Delhi",
+                "Connection": "Prepaid 4G SIM card",
+                "Hometown": "New Delhi, India",
+                "Language": "Hindi",
+                "IMEI number": "3567***9***12345",
+                "Tracking History": "Traced by 5 people in 24 hrs"
+            }
+        }
+    }
+    
+    # Send demo text report
+    text_report = generate_text_report(demo_data)
+    await update.message.reply_text(
+        f"<pre>{text_report}</pre>",
+        parse_mode="HTML",
+    )
+    
+    # Send demo PDF
+    try:
+        pdf_buffer = generate_osint_pdf(demo_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename="DEMO_OSINT_REPORT.pdf",
+            caption="\U0001f4c4 <b>Demo PDF Report</b>\nThis is how your reports will look.",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"Demo PDF failed: {e}")
+    
+    await update.message.reply_text(
+        "\u2139\ufe0f <b>That was a demo!</b>\n"
+        "Enter a real phone number to get actual OSINT data.\n"
+        "Tap 'Phone Lookup' to start.",
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
 
 
 async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
