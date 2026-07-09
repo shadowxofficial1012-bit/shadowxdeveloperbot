@@ -194,6 +194,11 @@ async def admin_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
 
 
+async def handle_pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /pending command - shows pending transactions."""
+    await admin_pending(update, context)
+
+
 async def admin_lookup_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show recent lookup logs."""
     if not is_admin(update.effective_user.id):

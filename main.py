@@ -39,6 +39,7 @@ from admin import (
     admin_lookup_logs,
     admin_broadcast,
     handle_admin_text,
+    handle_pending_command,
 )
 
 logging.basicConfig(
@@ -187,6 +188,7 @@ def main():
     app.add_handler(CommandHandler("demo", demo_result))
     app.add_handler(CommandHandler("approve", handle_approve_command))
     app.add_handler(CommandHandler("reject", handle_reject_command))
+    app.add_handler(CommandHandler("pending", handle_pending_command))
 
     # Callback handler (inline buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))
