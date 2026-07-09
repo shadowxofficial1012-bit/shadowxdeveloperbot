@@ -680,9 +680,10 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check if we got any data
+    # Check if we got any data (numleak has chain OR calltracer)
     has_num_data = result_num["success"] and result_num.get("data", {}).get("results")
-    has_leak_data = result_leak["success"] and result_leak.get("data", {}).get("chain")
+    numleak_data_raw = result_leak.get("data", {}) if result_leak["success"] else {}
+    has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
 
     if not has_num_data and not has_leak_data:
         await loading_msg.edit_text(
@@ -719,51 +720,46 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # PART 1: Send number lookup report
-    if has_num_data:
-        report = build_osint_report(result_num["data"])
-        code_block = f"<pre>{report}</pre>"
-        
-        if len(code_block) + 50 > MAX_MSG_LEN:
-            part1 = report[:3800]
-            part2 = report[3800:]
+    # PART 1: Send hacker-style text report
+    from pdf_exporter import generate_text_report, generate_osint_pdf
+    
+    text_report = generate_text_report(combined_data)
+    code_block = f"<pre>{text_report}</pre>"
+    
+    if len(code_block) + 50 > MAX_MSG_LEN:
+        part1 = text_report[:3800]
+        part2 = text_report[3800:]
+        await update.message.reply_text(
+            f"<pre>{part1}</pre>",
+            parse_mode="HTML",
+        )
+        if part2:
             await update.message.reply_text(
-                f"<pre>{part1}</pre>",
+                f"<pre>{part2}</pre>",
                 parse_mode="HTML",
             )
-            if part2:
-                await update.message.reply_text(
-                    f"<pre>{part2}</pre>",
-                    parse_mode="HTML",
-                )
-        else:
-            await update.message.reply_text(
-                code_block,
-                parse_mode="HTML",
-            )
+    else:
+        await update.message.reply_text(
+            code_block,
+            parse_mode="HTML",
+        )
 
-    # PART 2: Send numleak report
-    if has_leak_data:
-        report = build_numleak_report(result_leak["data"])
-        code_block = f"<pre>{report}</pre>"
-        
-        if len(code_block) + 50 > MAX_MSG_LEN:
-            part1 = report[:3800]
-            part2 = report[3800:]
-            await update.message.reply_text(
-                f"<pre>{part1}</pre>",
-                parse_mode="HTML",
-            )
-            if part2:
-                await update.message.reply_text(
-                    f"<pre>{part2}</pre>",
-                    parse_mode="HTML",
-                )
-        else:
-            await update.message.reply_text(
-                code_block,
-                parse_mode="HTML",
-            )
+    # PART 2: Send PDF report
+    try:
+        pdf_buffer = generate_osint_pdf(combined_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename=f"OSINT_{phone_number}.pdf",
+            caption=f"\U0001f4c4 <b>PDF Report</b> for <code>{phone_number}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        await update.message.reply_text(
+            f"\u26a0\ufe0f PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
+            parse_mode="HTML",
+        )
 
     # PART 3: Summary header
     header = (
