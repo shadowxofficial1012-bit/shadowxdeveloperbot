@@ -701,7 +701,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle payment screenshot upload."""
+    """Handle payment screenshot upload - auto-approve payments."""
     user = update.effective_user
     awaiting = context.user_data.get("awaiting_screenshot")
 
@@ -722,50 +722,37 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Create transaction and auto-approve
     tx_id = db.create_transaction(user.id, awaiting, pkg["credits"], pkg["price"], screenshot_file_id)
+    db.update_transaction_status(tx_id, "approved")
+    db.add_credits(user.id, pkg["credits"])
 
     context.user_data.pop("awaiting_screenshot", None)
     context.user_data.pop("pending_package", None)
 
     await update.message.reply_text(
-        f"\u2705 <b>Payment Screenshot Received!</b>\n\n"
+        f"\u2705 <b>Payment Approved!</b>\n\n"
         f"Package: <b>{pkg['label']}</b>\n"
         f"Amount: \u20b9{pkg['price']}\n"
-        f"Credits: {pkg['credits']}\n"
-        f"Transaction ID: <code>#{tx_id}</code>\n\n"
-        "\u23f3 Your payment is now <b>pending review</b>.\n"
-        "An admin will verify and approve it shortly.\n\n"
-        "You will be notified once approved.",
+        f"+{pkg['credits']} credits added\n"
+        f"Balance: <b>{db.get_credits(user.id)}</b> credits\n\n"
+        "You can now use the bot!",
         reply_markup=main_menu_keyboard(),
         parse_mode="HTML",
     )
 
-    # Notify admins
+    # Notify admins (for record keeping)
     from config import ADMIN_IDS
     for admin_id in ADMIN_IDS:
         try:
-            caption = (
-                f"\U0001f4e2 <b>New Payment Request</b>\n\n"
+            await context.bot.send_message(
+                admin_id,
+                f"\U0001f4e2 <b>Auto-Approved Payment</b>\n\n"
                 f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
                 f"User ID: <code>{user.id}</code>\n"
                 f"Package: <b>{pkg['label']}</b>\n"
-                f"Amount: \u20b9{pkg['price']}\n"
-                f"Credits: {pkg['credits']}\n"
-                f"TX ID: <code>#{tx_id}</code>"
+                f"+{pkg['credits']} credits",
+                parse_mode="HTML",
             )
-            if update.message.photo:
-                await context.bot.send_photo(
-                    admin_id,
-                    photo=screenshot_file_id,
-                    caption=caption,
-                    parse_mode="HTML",
-                )
-            else:
-                await context.bot.send_document(
-                    admin_id,
-                    document=screenshot_file_id,
-                    caption=caption,
-                    parse_mode="HTML",
-                )
         except Exception:
             pass

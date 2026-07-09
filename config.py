@@ -21,9 +21,9 @@ UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
 # Credit Packages
 CREDIT_PACKAGES = {
-    "starter": {"credits": 10, "price": 49, "label": "Starter Pack"},
-    "pro": {"credits": 50, "price": 199, "label": "Pro Pack"},
-    "unlimited": {"credits": 9999, "price": 499, "label": "Unlimited Pack"},
+    "daily": {"credits": 10, "price": 10, "label": "1 Day Pack"},
+    "weekly": {"credits": 100, "price": 100, "label": "1 Week Pack"},
+    "monthly": {"credits": 200, "price": 200, "label": "1 Month Pack"},
 }
 
 # Free credits for new users
