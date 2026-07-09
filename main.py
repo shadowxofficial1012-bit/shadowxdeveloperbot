@@ -26,9 +26,14 @@ from admin import (
     admin_stats,
     admin_pending,
     admin_add_credits,
+    admin_set_credits,
+    admin_reset_credits,
     admin_ban,
     admin_unban,
     admin_user_lookup,
+    admin_all_users,
+    admin_lookup_logs,
+    admin_broadcast,
     handle_admin_text,
 )
 
@@ -94,9 +99,14 @@ async def handle_text(update: Update, context):
         "\U0001f4ca Stats": admin_stats,
         "\U0001f4e6 Pending Payments": admin_pending,
         "\U0001f4b0 Add Credits": admin_add_credits,
+        "\U0001f48e Set Credits": admin_set_credits,
+        "\U0001f4b1 Reset Credits": admin_reset_credits,
         "\U0001f6ab Ban User": admin_ban,
-        "\U0001f6ab Unban User": admin_unban,
+        "\U0001f51a Unban User": admin_unban,
         "\U0001f464 User Lookup": admin_user_lookup,
+        "\U0001f465 All Users": admin_all_users,
+        "\U0001f50d Lookup Logs": admin_lookup_logs,
+        "\U0001f4e2 Broadcast": admin_broadcast,
         "\U0001f519 Main Menu": admin_start,
     }
 

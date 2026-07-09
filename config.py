@@ -12,7 +12,7 @@ OSINT_API_NUMLEAK_URL = "https://ft-osint-api.duckdns.org/api/numleak"
 OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi")
 
 # Admin IDs (comma-separated Telegram user IDs)
-_admin_str = os.getenv("ADMIN_IDS", "")
+_admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")
 ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
 
 # UPI Payment Details

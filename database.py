@@ -230,6 +230,14 @@ def get_lookup_by_id(lookup_id: int, user_id: int):
     return dict(row) if row else None
 
 
+def set_credits(user_id, amount):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE users SET credits = ? WHERE user_id = ?", (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
 def get_all_users():
     conn = get_db()
     c = conn.cursor()
@@ -237,6 +245,15 @@ def get_all_users():
     users = [dict(row) for row in c.fetchall()]
     conn.close()
     return users
+
+
+def get_recent_lookups(limit=15):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT user_id, username, success, created_at FROM lookup_log ORDER BY created_at DESC LIMIT ?", (limit,))
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
 
 
 def get_user_count():

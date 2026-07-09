@@ -22,8 +22,10 @@ def admin_keyboard():
     keyboard = [
         [KeyboardButton("\U0001f4ca Stats"), KeyboardButton("\U0001f4e6 Pending Payments")],
         [KeyboardButton("\U0001f464 User Lookup"), KeyboardButton("\U0001f4b0 Add Credits")],
-        [KeyboardButton("\U0001f6ab Ban User"), KeyboardButton("\U0001f6ab Unban User")],
-        [KeyboardButton("\U0001f519 Main Menu")],
+        [KeyboardButton("\U0001f48e Set Credits"), KeyboardButton("\U0001f4b1 Reset Credits")],
+        [KeyboardButton("\U0001f6ab Ban User"), KeyboardButton("\U0001f51a Unban User")],
+        [KeyboardButton("\U0001f465 All Users"), KeyboardButton("\U0001f50d Lookup Logs")],
+        [KeyboardButton("\U0001f4e2 Broadcast"), KeyboardButton("\U0001f519 Main Menu")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
