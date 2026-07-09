@@ -381,7 +381,14 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 sent += 1
             except Exception:
-                failed += 1
+                # Fallback: send as plain text if HTML parsing fails
+                try:
+                    await context.bot.send_message(
+                        u["user_id"], broadcast_msg
+                    )
+                    sent += 1
+                except Exception:
+                    failed += 1
 
         await update.message.reply_text(
             f"\U0001f4e2 <b>Broadcast Complete</b>\n\n"
