@@ -42,7 +42,7 @@ class OSINTReportPDF(FPDF):
         self.set_y(-15)
         self.set_font("Courier", "", 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f"Powered by {BRAND_NAME} | {BRAND_TAGLINE}", align="C")
+        self.cell(0, 10, f"Powered by @{BRAND_NAME} | {BRAND_TAGLINE}", align="C")
 
     def section_header(self, title: str):
         self.set_font("Courier", "B", 11)
