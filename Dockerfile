@@ -1,9 +1,10 @@
 FROM python:3.11-slim
 
-# Install system dependencies for Pillow and fonts
+# Install system dependencies for Pillow, fonts, and curl (used for API calls)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-liberation \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -19,10 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash botuser
+RUN useradd --create-home --shell /bin/bash botuser && \
+    chown -R botuser:botuser /app
 USER botuser
 
-# Expose no ports (Telegram bot uses long polling)
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1

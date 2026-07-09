@@ -1,6 +1,7 @@
 import logging
 import json
 import time
+import asyncio
 from collections import defaultdict
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -82,124 +83,131 @@ def format_number(n):
 
 def build_osint_report(data: dict) -> str:
     """Build a beautifully formatted OSINT report from API response data."""
-    profile = data.get("profile", {})
-    osint = data.get("osint", {})
-    osint_note = data.get("osint_note", "")
-
     lines = []
-    lines.append("========================================")
-    lines.append("  INSTAGRAM OSINT REPORT")
-    lines.append("========================================")
+    lines.append("╔══════════════════════════════════════╗")
+    lines.append("║   📱 PHONE NUMBER OSINT REPORT       ║")
+    lines.append("╚══════════════════════════════════════╝")
     lines.append("")
 
-    # Profile Section
-    lines.append("[PROFILE INFO]")
-    lines.append("----------------------------------------")
-    lines.append(f"  Username    : @{safe_str(profile.get('username'))}")
-    lines.append(f"  Full Name   : {escape_html(safe_str(profile.get('full_name')))}")
-
-    verified = "[VERIFIED]" if profile.get("is_verified") else "[NOT VERIFIED]"
-    lines.append(f"  Verified    : {verified}")
-
-    private = "[PRIVATE]" if profile.get("is_private") else "[PUBLIC]"
-    lines.append(f"  Account     : {private}")
-
-    if profile.get("is_business_account"):
-        lines.append("  Type        : Business Account")
-    elif profile.get("is_professional_account"):
-        lines.append("  Type        : Professional Account")
-    else:
-        lines.append("  Type        : Personal Account")
-
-    if profile.get("category_name"):
-        lines.append(f"  Category    : {escape_html(str(profile['category_name']))}")
-    if profile.get("business_category_name"):
-        lines.append(f"  Business    : {escape_html(str(profile['business_category_name']))}")
-
+    # Phone Number Info Section
+    number = data.get("number", "N/A")
+    total = data.get("total", 0)
+    results = data.get("results", [])
+    
+    lines.append("📋 PHONE NUMBER INFO")
+    lines.append("─────────────────────────────────────")
+    lines.append(f"  📞 Number    : {number}")
+    lines.append(f"  📊 Records   : {total} found")
+    lines.append(f"  ✅ Status    : {'DATA FOUND' if results else 'NO DATA'}")
     lines.append("")
 
-    # Stats Section
-    lines.append("[STATISTICS]")
-    lines.append("----------------------------------------")
-    lines.append(f"  Followers   : {format_number(profile.get('followers', 0))}")
-    lines.append(f"  Following   : {format_number(profile.get('following', 0))}")
-    lines.append(f"  Posts       : {format_number(profile.get('posts', 0))}")
-    if profile.get("estimated_creation_year"):
-        lines.append(f"  Created     : ~{profile['estimated_creation_year']}")
-    if profile.get("id"):
-        lines.append(f"  Account ID  : {profile['id']}")
-    lines.append("")
-
-    # Bio Section
-    bio = profile.get("biography", "")
-    if bio:
-        lines.append("[BIOGRAPHY]")
-        lines.append("----------------------------------------")
-        lines.append(f"  {escape_html(bio[:300])}")
-        lines.append("")
-
-    # External URL
-    url = profile.get("external_url", "")
-    if url:
-        lines.append(f"[WEBSITE]")
-        lines.append(f"  {url}")
-        lines.append("")
-
-    # Profile Picture
-    pfp = profile.get("pfp", "")
-    if pfp:
-        lines.append("[PROFILE PICTURE]")
-        lines.append(f"  {pfp[:150]}")
-        lines.append("")
-
-    # OSINT Data Section
-    lines.append("[OSINT LEAKED DATA]")
-    lines.append("========================================")
-
-    if osint.get("available") and osint.get("records"):
-        lines.append(f"  Status: DATA AVAILABLE ({len(osint['records'])} records found)")
-        lines.append("")
-        for i, record in enumerate(osint["records"], 1):
-            lines.append(f"  --- Record #{i} ---")
-            if record.get("id"):
-                lines.append(f"  ID       : {record['id']}")
-            if record.get("username"):
-                lines.append(f"  Username : {escape_html(str(record['username']))}")
-            if record.get("name"):
-                lines.append(f"  Name     : {escape_html(str(record['name']))}")
-            if record.get("email"):
-                lines.append(f"  Email    : {escape_html(str(record['email']))}")
-            if record.get("phone"):
-                lines.append(f"  Phone    : {str(record['phone'])}")
-            if record.get("address"):
-                lines.append(f"  Address  : {escape_html(str(record['address'][:100]))}")
-            lines.append("")
-    else:
-        lines.append("  Status: NO DATA FOUND")
-        if osint_note:
-            lines.append(f"  Note: {escape_html(osint_note)}")
+    # If we have results, show first few records
+    if results:
+        lines.append("🔍 RECORD DETAILS")
+        lines.append("─────────────────────────────────────")
+        
+        # Show first 3 records to keep message concise
+        for i, record in enumerate(results[:3], 1):
+            lines.append(f"\n  📌 Record #{i}")
+            lines.append(f"  ├─ Name      : {escape_html(safe_str(record.get('name')))}")
+            lines.append(f"  ├─ Mobile    : {safe_str(record.get('mobile'))}")
+            lines.append(f"  ├─ Father    : {escape_html(safe_str(record.get('fname')))}")
+            lines.append(f"  ├─ Address   : {escape_html(safe_str(record.get('address', '')[:80]))}")
+            lines.append(f"  ├─ Circle    : {safe_str(record.get('circle'))}")
+            if record.get('email') and record['email'] != 'N/A':
+                lines.append(f"  ├─ Email     : {escape_html(str(record['email']))}")
+            if record.get('alt') and record['alt'] != 'N/A':
+                lines.append(f"  ├─ Alt Num   : {safe_str(record.get('alt'))}")
+            lines.append(f"  └─ ID        : {safe_str(record.get('id'))}")
+        
+        if len(results) > 3:
+            lines.append(f"\n  ... and {len(results) - 3} more records")
         lines.append("")
 
     # Footer
-    lines.append("========================================")
-    lines.append(f"  Source    : {safe_str(data.get('by', 'Unknown'))}")
-    lines.append(f"  Cached    : {'Yes' if data.get('cached') else 'No'}")
-    lines.append(f"  Time      : {safe_str(data.get('cached_at', 'N/A'))[:19]}")
-    lines.append("========================================")
+    lines.append("═══════════════════════════════════════")
+    lines.append(f"  🔗 Source    : {safe_str(data.get('by', 'Unknown'))}")
+    lines.append(f"  📡 Channel   : {safe_str(data.get('channel', 'N/A'))}")
+    lines.append(f"  🕐 Cached    : {'Yes' if data.get('cached') else 'No'}")
+    if data.get('cached_at'):
+        lines.append(f"  ⏰ Time      : {str(data.get('cached_at', ''))[:19]}")
+    lines.append("═══════════════════════════════════════")
+
+    return "\n".join(lines)
+
+
+def build_numleak_report(data: dict) -> str:
+    """Build a beautifully formatted numleak report from API response data."""
+    lines = []
+    lines.append("╔══════════════════════════════════════╗")
+    lines.append("║   💾 DATA LEAK REPORT                ║")
+    lines.append("╚══════════════════════════════════════╝")
+    lines.append("")
+
+    number = data.get("number", "N/A")
+    
+    lines.append("📋 NUMBER INFO")
+    lines.append("─────────────────────────────────────")
+    lines.append(f"  📞 Number    : {number}")
+    lines.append("")
+
+    # Chain info (leak details)
+    chain = data.get("chain", {})
+    if chain:
+        lines.append("💾 LEAK DETAILS")
+        lines.append("─────────────────────────────────────")
+        lines.append(f"  📦 Title     : {escape_html(safe_str(chain.get('title')))}")
+        lines.append(f"  📝 Info      : {escape_html(safe_str(chain.get('description', '')[:150]))}")
+        lines.append("")
+        
+        records = chain.get("records", [])
+        if records:
+            lines.append("🔍 LEAKED RECORDS")
+            lines.append("─────────────────────────────────────")
+            
+            for i, record in enumerate(records[:3], 1):
+                lines.append(f"\n  📌 Record #{i}")
+                lines.append(f"  ├─ Name      : {escape_html(safe_str(record.get('FullName')))}")
+                lines.append(f"  ├─ Father    : {escape_html(safe_str(record.get('FatherName')))}")
+                lines.append(f"  ├─ Phone     : {safe_str(record.get('Phone'))}")
+                if record.get('Phone2'):
+                    lines.append(f"  ├─ Phone 2   : {safe_str(record.get('Phone2'))}")
+                if record.get('Phone3'):
+                    lines.append(f"  ├─ Phone 3   : {safe_str(record.get('Phone3'))}")
+                lines.append(f"  ├─ Doc ID    : {safe_str(record.get('DocumentNumber'))}")
+                lines.append(f"  ├─ Address   : {escape_html(safe_str(record.get('Adres', '')[:80]))}")
+                lines.append(f"  └─ Region    : {safe_str(record.get('Region'))}")
+            
+            if len(records) > 3:
+                lines.append(f"\n  ... and {len(records) - 3} more records")
+        lines.append("")
+
+    # Call tracer info
+    calltracer = data.get("calltracer", {})
+    if calltracer:
+        lines.append("📡 SIM & DEVICE INFO")
+        lines.append("─────────────────────────────────────")
+        lines.append(f"  📱 SIM Card  : {safe_str(calltracer.get('SIM card'))}")
+        lines.append(f"  🌍 State     : {safe_str(calltracer.get('Mobile State'))}")
+        lines.append(f"  📡 Connection: {safe_str(calltracer.get('Connection'))}")
+        lines.append(f"  🏠 Hometown  : {safe_str(calltracer.get('Hometown'))}")
+        lines.append(f"  🗣️ Language   : {safe_str(calltracer.get('Language'))}")
+        if calltracer.get('IMEI number'):
+            lines.append(f"  🔢 IMEI      : {safe_str(calltracer.get('IMEI number'))}")
+        lines.append("")
+
+    # Footer
+    lines.append("═══════════════════════════════════════")
+    lines.append(f"  🔗 Source    : {safe_str(data.get('by', 'Unknown'))}")
+    lines.append(f"  ⚡ Response  : {safe_str(data.get('response_time_ms', 'N/A'))}ms")
+    lines.append("═══════════════════════════════════════")
 
     return "\n".join(lines)
 
 
 def build_raw_json(data: dict) -> str:
     """Build a raw JSON code block of the API response."""
-    # Remove the large pfp URL to keep it clean
-    clean = dict(data)
-    if "profile" in clean and "pfp" in clean["profile"]:
-        pfp = clean["profile"]["pfp"]
-        clean["profile"] = dict(clean["profile"])
-        clean["profile"]["pfp"] = pfp[:80] + "..."
-
-    raw = json.dumps(clean, indent=2, ensure_ascii=False)
+    raw = json.dumps(data, indent=2, ensure_ascii=False)
     # Truncate if too long for Telegram
     if len(raw) > 3800:
         raw = raw[:3800] + "\n... (truncated)"
@@ -234,7 +242,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
         f"\U0001f44b Welcome, <b>{user.first_name}</b>!\n\n"
         f"\U0001f50d <b>{BRAND_NAME}</b>\n"
-        "Get detailed information about any Instagram account.\n\n"
+        "Get detailed information about any phone number.\n\n"
     )
 
     if is_new:
@@ -255,10 +263,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     text = (
-        "\U0001f4d6 <b>How to Use Hathix Shadow</b>\n\n"
-        "\U0001f50d <b>Instagram Lookup</b>\n"
-        "1. Tap 'Instagram Lookup' button\n"
-        "2. Enter the Instagram username (without @)\n"
+        "\U0001f4d6 <b>How to Use Phone OSINT Bot</b>\n\n"
+        "\U0001f50d <b>Phone Lookup</b>\n"
+        "1. Tap 'Phone Lookup' button\n"
+        "2. Enter the phone number (e.g., 9876543210)\n"
         "3. Get detailed OSINT data instantly!\n\n"
         "\U0001f4b3 <b>Buy Credits</b>\n"
         "1. Tap 'Buy Credits' button\n"
@@ -340,7 +348,7 @@ async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Choose a package below:\n\n"
         f"\U0001f4b5 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
         f"\U0001f464 <b>Name:</b> {UPI_NAME}\n\n"
-        "\U0001f4b0 Each credit = 1 Instagram lookup\n"
+        "\U0001f4b0 Each credit = 1 Phone Lookup\n"
         "\U0001f510 Send payment, then upload screenshot to confirm."
     )
     # Send QR code image if available
@@ -506,7 +514,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Export report as image
     if data.startswith("export_"):
-        export_username = data.replace("export_", "")
+        export_number = data.replace("export_", "")
         lookup_data = context.user_data.get("last_lookup")
         if not lookup_data:
             await query.edit_message_text(
@@ -523,7 +531,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=query.message.chat.id,
                 photo=image_buffer,
-                caption=f"\U0001f4f7 <b>OSINT Report</b> for @{export_username}",
+                caption=f"\U0001f4f7 <b>OSINT Report</b> for {export_number}",
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -560,7 +568,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("\u274c Lookup not found.", reply_markup=back_button())
             return
         await query.edit_message_text(
-            f"\U0001f4f1 Re-export <b>@{cached['username']}</b>\n\n"
+            f"\U0001f4f1 Re-export <b>{cached['username']}</b>\n\n"
             "Tap below to generate the image:",
             reply_markup=reexport_keyboard(lookup_id, cached["username"]),
             parse_mode="HTML",
@@ -585,7 +593,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=query.message.chat.id,
                 photo=image_buffer,
-                caption=f"\U0001f4f7 <b>Re-exported Report</b> for @{cached['username']}",
+                caption=f"\U0001f4f7 <b>Re-exported Report</b> for {cached['username']}",
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -599,7 +607,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle Instagram username lookup with full code-formatted output."""
+    """Handle phone number lookup with full code-formatted output."""
     user = update.effective_user
 
     # Check if banned
@@ -638,15 +646,15 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Extract username from message
-    username = update.message.text.strip().lstrip("@")
+    # Extract phone number from message
+    phone_number = update.message.text.strip().replace(" ", "").replace("-", "").replace("+", "")
 
-    # Validate
-    if not username or " " in username or len(username) > 30 or (not username.isalnum() and "_" not in username and "." not in username):
+    # Validate - only digits, 10-15 characters
+    if not phone_number or not phone_number.isdigit() or len(phone_number) < 10 or len(phone_number) > 15:
         await update.message.reply_text(
-            "\u274c <b>Invalid username!</b>\n\n"
-            "Please enter a valid Instagram username.\n"
-            "Example: <code>cristiano</code>",
+            "\u274c <b>Invalid phone number!</b>\n\n"
+            "Please enter a valid phone number.\n"
+            "Example: <code>9876543210</code>",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
@@ -654,27 +662,33 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Show loading
     loading_msg = await update.message.reply_text(
-        f"\U0001f50d <b>Looking up</b> <code>{username}</code>...\nPlease wait.",
+        f"\U0001f50d <b>Looking up</b> <code>{phone_number}</code>...\nPlease wait.",
         parse_mode="HTML",
     )
 
-    # Call API
-    result = await api_client.lookup_instagram(username)
+    # Call both APIs in parallel
+    result_num, result_leak = await asyncio.gather(
+        api_client.lookup_number(phone_number),
+        api_client.lookup_numleak(phone_number),
+    )
 
-    if not result["success"]:
+    # Check if at least one API succeeded
+    if not result_num["success"] and not result_leak["success"]:
         await loading_msg.edit_text(
-            f"\u274c <b>Lookup Failed</b>\n\nError: {result['error']}\n\nPlease try again later.",
+            f"\u274c <b>Lookup Failed</b>\n\nError: {result_num.get('error', 'Unknown error')}\n\nPlease try again later.",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return
 
-    data = result["data"]
+    # Check if we got any data
+    has_num_data = result_num["success"] and result_num.get("data", {}).get("results")
+    has_leak_data = result_leak["success"] and result_leak.get("data", {}).get("chain")
 
-    if not data.get("success"):
+    if not has_num_data and not has_leak_data:
         await loading_msg.edit_text(
-            f"\u274c <b>No data found</b> for <code>{username}</code>.\n\n"
-            "The username may not exist or the API is unavailable.",
+            f"\u274c <b>No data found</b> for <code>{phone_number}</code>.\n\n"
+            "The number may not exist in the database or the API is unavailable.",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
@@ -692,96 +706,86 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Record this lookup for rate limiting
     _record_lookup(user.id)
 
-    db.log_lookup(user.id, username, True)
+    # Merge data for storage
+    combined_data = {
+        "number": phone_number,
+        "number_data": result_num.get("data", {}),
+        "numleak_data": result_leak.get("data", {}),
+    }
+
+    db.log_lookup(user.id, phone_number, True)
     # Save full API response for re-export
-    db.save_lookup_result(user.id, username, json.dumps(data))
-
-    # Build the formatted OSINT report
-    report = build_osint_report(data)
-    pfp = data.get("profile", {}).get("pfp", "")
-
-    # PART 1: Send profile picture with header
-    header = (
-        f"\U0001f4f1 <b>OSINT Report for @{safe_str(data.get('username', username))}</b>\n"
-        f"Credits remaining: <b>{db.get_credits(user.id)}</b>"
-    )
+    db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
 
     try:
         await loading_msg.delete()
     except Exception:
         pass
 
-    # Send photo with short header if pfp exists
-    if pfp and pfp.startswith("http"):
-        try:
-            await update.message.reply_photo(
-                photo=pfp,
-                caption=header,
-                parse_mode="HTML",
-            )
-        except Exception:
-            # If photo fails, just continue with text
-            pass
-
-    # PART 2: Send the full report in a code block
-    code_block = f"<pre>{report}</pre>"
-
-    # Telegram has a 4096 char limit for messages
-    if len(code_block) + 50 > MAX_MSG_LEN:
-        # Split into parts
-        part1 = report[:3800]
-        part2 = report[3800:]
-
-        await update.message.reply_text(
-            f"<pre>{part1}</pre>",
-            parse_mode="HTML",
-            reply_markup=main_menu_keyboard() if not part2 else None,
-        )
-        if part2:
+    # PART 1: Send number lookup report
+    if has_num_data:
+        report = build_osint_report(result_num["data"])
+        code_block = f"<pre>{report}</pre>"
+        
+        if len(code_block) + 50 > MAX_MSG_LEN:
+            part1 = report[:3800]
+            part2 = report[3800:]
             await update.message.reply_text(
-                f"<pre>{part2}</pre>",
+                f"<pre>{part1}</pre>",
                 parse_mode="HTML",
-                reply_markup=main_menu_keyboard(),
             )
-    else:
-        await update.message.reply_text(
-            code_block,
-            parse_mode="HTML",
-            reply_markup=main_menu_keyboard(),
-        )
+            if part2:
+                await update.message.reply_text(
+                    f"<pre>{part2}</pre>",
+                    parse_mode="HTML",
+                )
+        else:
+            await update.message.reply_text(
+                code_block,
+                parse_mode="HTML",
+            )
+
+    # PART 2: Send numleak report
+    if has_leak_data:
+        report = build_numleak_report(result_leak["data"])
+        code_block = f"<pre>{report}</pre>"
+        
+        if len(code_block) + 50 > MAX_MSG_LEN:
+            part1 = report[:3800]
+            part2 = report[3800:]
+            await update.message.reply_text(
+                f"<pre>{part1}</pre>",
+                parse_mode="HTML",
+            )
+            if part2:
+                await update.message.reply_text(
+                    f"<pre>{part2}</pre>",
+                    parse_mode="HTML",
+                )
+        else:
+            await update.message.reply_text(
+                code_block,
+                parse_mode="HTML",
+            )
+
+    # PART 3: Summary header
+    header = (
+        f"\U0001f4f1 <b>Lookup Complete for {phone_number}</b>\n"
+        f"Credits remaining: <b>{db.get_credits(user.id)}</b>"
+    )
+    await update.message.reply_text(
+        header,
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
 
     # Store data for export
-    context.user_data["last_lookup"] = data
-
-    # PART 3: Send raw JSON as a separate code message
-    raw_json = build_raw_json(data)
-    raw_json_safe = escape_html(raw_json)
-    json_header = "\U0001f4cb <b>Raw API Response (JSON):</b>"
-
-    if len(raw_json_safe) + len(json_header) + 50 > MAX_MSG_LEN:
-        # Split JSON
-        json_part1 = raw_json_safe[:3800]
-        json_part2 = raw_json_safe[3800:]
-
-        await update.message.reply_text(
-            f"{json_header}\n<pre>{json_part1}</pre>",
-            parse_mode="HTML",
-        )
-        if json_part2:
-            await update.message.reply_text(
-                f"<pre>{json_part2}</pre>",
-                parse_mode="HTML",
-            )
-    else:
-        await update.message.reply_text(
-            f"{json_header}\n<pre>{raw_json_safe}</pre>",
-            parse_mode="HTML",
-        )
+    context.user_data["last_lookup"] = combined_data
 
     # PART 4: Export button
-    export_msg = await update.message.reply_text(
+    await update.message.reply_text(
         "\U0001f4e5 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
-        reply_markup=export_keyboard(username),
+        reply_markup=export_keyboard(phone_number),
         parse_mode="HTML",
     )
 

@@ -6,9 +6,10 @@ load_dotenv()
 # Telegram Bot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 
-# OSINT API
-OSINT_API_URL = "https://ft-osint-api.duckdns.org/api/insta"
-OSINT_API_KEY = os.getenv("OSINT_API_KEY", "shayan-exploindia")
+# OSINT APIs
+OSINT_API_NUMBER_URL = "https://ft-osint-api.duckdns.org/api/number"
+OSINT_API_NUMLEAK_URL = "https://ft-osint-api.duckdns.org/api/numleak"
+OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi")
 
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "")
@@ -36,5 +37,5 @@ QR_CODE_PATH = os.getenv("QR_CODE_PATH", "media/qr_code.png")
 
 # Export Image Branding
 BRAND_NAME = os.getenv("BRAND_NAME", "OSINT Bot")
-BRAND_TAGLINE = os.getenv("BRAND_TAGLINE", "Instagram Intelligence Report")
+BRAND_TAGLINE = os.getenv("BRAND_TAGLINE", "Phone Number OSINT Report")
 LOGO_PATH = os.getenv("LOGO_PATH", "media/logo.png")

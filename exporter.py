@@ -1,12 +1,12 @@
 """
-OSINT Report Image Exporter
-Generates styled PNG images of Instagram OSINT reports.
+Phone Number OSINT Report Image Exporter
+Generates styled PNG images of phone number OSINT reports.
 Cross-platform: works on Windows, Linux (Railway), and macOS.
 """
 
 import io
 import os
-import textwrap
+import json
 from PIL import Image, ImageDraw, ImageFont
 
 # Load branding from config
@@ -14,7 +14,7 @@ try:
     from config import BRAND_NAME, BRAND_TAGLINE
 except ImportError:
     BRAND_NAME = "OSINT Bot"
-    BRAND_TAGLINE = "Instagram Intelligence Report"
+    BRAND_TAGLINE = "Phone Number OSINT Report"
 
 # Color palette - dark hacker theme
 BG_COLOR = (18, 18, 24)
@@ -41,7 +41,7 @@ try:
 except ImportError:
     LOGO_PATH = "media/logo.png"
 
-LOGO_SIZE = 80  # Logo will be resized to this height
+LOGO_SIZE = 80
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -114,56 +114,68 @@ def _format_number(n) -> str:
         return str(n)
 
 
+def _safe(val, default="N/A") -> str:
+    """Safely convert value to string."""
+    if val is None or val == "":
+        return default
+    return str(val)
+
+
 def _calculate_height(data: dict) -> int:
     """Calculate the required image height based on content."""
-    profile = data.get("profile", {})
-    osint = data.get("osint", {})
-
     height = PADDING
     height += 60  # Title
     height += 20  # Spacer
 
-    # Profile section
+    # Phone number info section
     height += 40
-    height += 30 * 8
-    if profile.get("biography"):
-        height += 30
+    height += 30 * 4
     height += 20
 
-    # Stats section
-    height += 40
-    height += 30 * 5
-    height += 20
+    # Records section (number data)
+    number_data = data.get("number_data", {})
+    results = number_data.get("results", [])
+    if results:
+        height += 40
+        height += 30 * min(len(results), 3) * 7  # ~7 fields per record
+        height += 20
 
-    # OSINT section
-    height += 40
-    if osint.get("available") and osint.get("records"):
-        for record in osint.get("records", [])[:5]:
-            height += 30 * 6
-            height += 10
-    else:
-        height += 30
+    # Leak data section
+    numleak_data = data.get("numleak_data", {})
+    chain = numleak_data.get("chain", {})
+    records = chain.get("records", [])
+    if records:
+        height += 40
+        height += 30 * min(len(records), 3) * 6
+        height += 20
+
+    # SIM info section
+    calltracer = numleak_data.get("calltracer", {})
+    if calltracer:
+        height += 40
+        height += 30 * 6
+        height += 20
 
     # Footer + Watermark
     height += 40
-    height += 80  # Extra space for watermark/branding
+    height += 80
 
     return max(height, 600)
 
 
 def generate_report_image(data: dict) -> io.BytesIO:
     """
-    Generate a styled PNG image of the OSINT report with branding watermark.
+    Generate a styled PNG image of the Phone Number OSINT report.
 
     Args:
-        data: The API response dictionary containing profile and osint data.
+        data: Combined data dict with number_data and numleak_data.
 
     Returns:
         io.BytesIO object containing the PNG image.
     """
-    profile = data.get("profile", {})
-    osint = data.get("osint", {})
-    osint_note = data.get("osint_note", "")
+    number = data.get("number", "N/A")
+    number_data = data.get("number_data", {})
+    numleak_data = data.get("numleak_data", {})
 
     img_height = _calculate_height(data)
 
@@ -184,54 +196,41 @@ def generate_report_image(data: dict) -> io.BytesIO:
     if os.path.exists(LOGO_PATH):
         try:
             logo = Image.open(LOGO_PATH).convert("RGBA")
-            # Resize logo to fit height
             aspect = logo.width / logo.height
             new_h = LOGO_SIZE
             new_w = int(new_h * aspect)
             logo = logo.resize((new_w, new_h), Image.LANCZOS)
-            # Paste logo on the right side of the header
             logo_x = IMG_WIDTH - PADDING - new_w
             img.paste(logo, (logo_x, y), logo)
             logo_loaded = True
         except Exception:
             pass
 
-    title = "INSTAGRAM OSINT REPORT"
+    title = "PHONE NUMBER OSINT REPORT"
     draw.text((PADDING, y), title, font=font_title, fill=TEXT_ACCENT)
     bbox = draw.textbbox((0, 0), title, font=font_title)
     y += bbox[3] - bbox[1] + 8
 
-    subtitle = f"Target: @{_safe(profile.get('username', 'unknown'))}"
+    subtitle = f"Target: {number}"
     draw.text((PADDING, y), subtitle, font=font_value, fill=TEXT_SECONDARY)
     y += 30
 
     y = _draw_divider(draw, y)
 
-    # === PROFILE SECTION ===
-    y = _draw_section_header(draw, y, "PROFILE INFO", font_section)
+    # === PHONE NUMBER INFO SECTION ===
+    y = _draw_section_header(draw, y, "PHONE NUMBER INFO", font_section)
 
-    fields = [
-        ("Username", f"@{_safe(profile.get('username'))}"),
-        ("Full Name", _safe(profile.get("full_name"))),
-        ("Verified", "Yes" if profile.get("is_verified") else "No"),
-        ("Account", "Private" if profile.get("is_private") else "Public"),
+    total = number_data.get("total", 0)
+    results = number_data.get("results", [])
+
+    info_fields = [
+        ("Number", number),
+        ("Total Records", _format_number(total)),
+        ("Status", "DATA FOUND" if results else "NO DATA"),
+        ("Source", _safe(number_data.get("by", "Unknown"))),
     ]
 
-    if profile.get("is_business_account"):
-        fields.append(("Type", "Business Account"))
-    elif profile.get("is_professional_account"):
-        fields.append(("Type", "Professional Account"))
-    else:
-        fields.append(("Type", "Personal Account"))
-
-    if profile.get("category_name"):
-        fields.append(("Category", str(profile["category_name"])))
-    if profile.get("business_category_name"):
-        fields.append(("Business", str(profile["business_category_name"])))
-    if profile.get("external_url"):
-        fields.append(("Website", str(profile["external_url"])[:60]))
-
-    for label, value in fields:
+    for label, value in info_fields:
         draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
         draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_PRIMARY)
         y += 28
@@ -239,97 +238,139 @@ def generate_report_image(data: dict) -> io.BytesIO:
     y += 10
     y = _draw_divider(draw, y)
 
-    # === STATISTICS SECTION ===
-    y = _draw_section_header(draw, y, "STATISTICS", font_section)
+    # === RECORD DETAILS SECTION ===
+    if results:
+        y = _draw_section_header(draw, y, "RECORD DETAILS", font_section)
 
-    stats = [
-        ("Followers", _format_number(profile.get("followers", 0))),
-        ("Following", _format_number(profile.get("following", 0))),
-        ("Posts", _format_number(profile.get("posts", 0))),
-    ]
-
-    if profile.get("estimated_creation_year"):
-        stats.append(("Created", f"~{profile['estimated_creation_year']}"))
-    if profile.get("id"):
-        stats.append(("Account ID", str(profile["id"])))
-
-    for label, value in stats:
-        draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
-        draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_BRIGHT)
-        y += 28
-
-    y += 10
-    y = _draw_divider(draw, y)
-
-    # === OSINT SECTION ===
-    y = _draw_section_header(draw, y, "OSINT LEAKED DATA", font_section)
-
-    if osint.get("available") and osint.get("records"):
-        record_count = len(osint["records"])
-        draw.text(
-            (PADDING + 10, y),
-            f"Status: Data Available ({record_count} records)",
-            font=font_value, fill=TEXT_ACCENT
-        )
-        y += 28
-
-        for i, record in enumerate(osint["records"][:5], 1):
+        for i, record in enumerate(results[:3], 1):
             y += 4
             draw.text((PADDING + 10, y), f"--- Record #{i} ---", font=font_label, fill=TEXT_WARN)
             y += 24
 
             record_fields = [
-                ("ID", record.get("id")),
-                ("Username", record.get("username")),
                 ("Name", record.get("name")),
+                ("Mobile", record.get("mobile")),
+                ("Father", record.get("fname")),
+                ("Address", str(record.get("address", ""))[:60]),
+                ("Circle", record.get("circle")),
                 ("Email", record.get("email")),
-                ("Phone", record.get("phone")),
-                ("Address", record.get("address")),
+                ("Alt Num", record.get("alt")),
             ]
 
             for label, value in record_fields:
-                if value:
+                if value and value != "N/A":
                     val_str = str(value)[:50]
                     draw.text((PADDING + 20, y), f"{label}:", font=font_small, fill=TEXT_SECONDARY)
                     draw.text((PADDING + 120, y), val_str, font=font_small, fill=TEXT_PRIMARY)
-                    y += 22
-    else:
-        draw.text(
-            (PADDING + 10, y),
-            "Status: No leaked data found",
-            font=font_value, fill=TEXT_DANGER
-        )
-        y += 28
-        if osint_note:
-            draw.text((PADDING + 10, y), f"Note: {osint_note}", font=font_small, fill=TEXT_SECONDARY)
+                    y += 20
+
+        if len(results) > 3:
+            draw.text(
+                (PADDING + 10, y),
+                f"... and {len(results) - 3} more records",
+                font=font_small, fill=TEXT_SECONDARY
+            )
             y += 24
 
-    y += 10
-    y = _draw_divider(draw, y)
+        y += 10
+        y = _draw_divider(draw, y)
+
+    # === LEAK DATA SECTION ===
+    chain = numleak_data.get("chain", {})
+    leak_records = chain.get("records", [])
+
+    if chain:
+        y = _draw_section_header(draw, y, "DATA LEAK DETAILS", font_section)
+
+        leak_fields = [
+            ("Title", _safe(chain.get("title"))),
+            ("Info", _safe(chain.get("description", ""))[:60]),
+        ]
+
+        for label, value in leak_fields:
+            draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
+            draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_PRIMARY)
+            y += 28
+
+        y += 10
+
+        if leak_records:
+            for i, record in enumerate(leak_records[:3], 1):
+                y += 4
+                draw.text((PADDING + 10, y), f"--- Leak Record #{i} ---", font=font_label, fill=TEXT_WARN)
+                y += 24
+
+                leak_record_fields = [
+                    ("Name", record.get("FullName")),
+                    ("Father", record.get("FatherName")),
+                    ("Phone", record.get("Phone")),
+                    ("Phone 2", record.get("Phone2")),
+                    ("Doc ID", record.get("DocumentNumber")),
+                    ("Address", str(record.get("Adres", ""))[:60]),
+                    ("Region", record.get("Region")),
+                ]
+
+                for label, value in leak_record_fields:
+                    if value:
+                        val_str = str(value)[:50]
+                        draw.text((PADDING + 20, y), f"{label}:", font=font_small, fill=TEXT_SECONDARY)
+                        draw.text((PADDING + 120, y), val_str, font=font_small, fill=TEXT_PRIMARY)
+                        y += 20
+
+            if len(leak_records) > 3:
+                draw.text(
+                    (PADDING + 10, y),
+                    f"... and {len(leak_records) - 3} more records",
+                    font=font_small, fill=TEXT_SECONDARY
+                )
+                y += 24
+
+        y += 10
+        y = _draw_divider(draw, y)
+
+    # === SIM & DEVICE INFO ===
+    calltracer = numleak_data.get("calltracer", {})
+    if calltracer:
+        y = _draw_section_header(draw, y, "SIM & DEVICE INFO", font_section)
+
+        sim_fields = [
+            ("SIM Card", calltracer.get("SIM card")),
+            ("State", calltracer.get("Mobile State")),
+            ("Connection", calltracer.get("Connection")),
+            ("Hometown", calltracer.get("Hometown")),
+            ("Language", calltracer.get("Language")),
+            ("IMEI", calltracer.get("IMEI number")),
+        ]
+
+        for label, value in sim_fields:
+            if value:
+                draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 28
+
+        y += 10
+        y = _draw_divider(draw, y)
 
     # === FOOTER ===
     draw.text(
         (PADDING, y),
-        f"Source: {_safe(data.get('by', 'Unknown'))} | Cached: {'Yes' if data.get('cached') else 'No'} | {_safe(data.get('cached_at', 'N/A'))[:19]}",
+        f"Source: {_safe(number_data.get('by', 'Unknown'))} | Channel: {_safe(number_data.get('channel', 'N/A'))}",
         font=font_small, fill=TEXT_SECONDARY
     )
     y += 30
 
     # === WATERMARK / BRANDING ===
-    # Draw a subtle branded bar at the bottom
     watermark_y = y + 10
     draw.rectangle(
         [0, watermark_y, IMG_WIDTH, watermark_y + 50],
         fill=WATERMARK_COLOR
     )
-    # Left: Brand name
     font_brand = _get_font(16, bold=True)
     draw.text(
         (PADDING, watermark_y + 14),
         f"{'=' * 3} {BRAND_NAME} {'=' * 3}",
         font=font_brand, fill=TEXT_ACCENT
     )
-    # Right: Tagline
     bbox_tag = draw.textbbox((0, 0), BRAND_TAGLINE, font=font_small)
     tag_width = bbox_tag[2] - bbox_tag[0]
     draw.text(
@@ -349,10 +390,3 @@ def generate_report_image(data: dict) -> io.BytesIO:
     buffer.seek(0)
 
     return buffer
-
-
-def _safe(val, default="N/A") -> str:
-    """Safely convert value to string."""
-    if val is None or val == "":
-        return default
-    return str(val)

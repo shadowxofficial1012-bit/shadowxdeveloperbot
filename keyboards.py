@@ -10,7 +10,7 @@ from config import CREDIT_PACKAGES
 def main_menu_keyboard():
     """Main menu reply keyboard."""
     keyboard = [
-        [KeyboardButton("\U0001f50d Instagram Lookup"), KeyboardButton("\U0001f4b0 My Balance")],
+        [KeyboardButton("\U0001f50d Phone Lookup"), KeyboardButton("\U0001f4b0 My Balance")],
         [KeyboardButton("\U0001f4b3 Buy Credits"), KeyboardButton("\U0001f4cb My History")],
         [KeyboardButton("\U0001f4dd Help"), KeyboardButton("\U0001f464 Profile")],
     ]

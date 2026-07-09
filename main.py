@@ -59,7 +59,7 @@ async def handle_text(update: Update, context):
 
     # Route by button text
     routes = {
-        "\U0001f50d Instagram Lookup": "lookup",
+        "\U0001f50d Phone Lookup": "lookup",
         "\U0001f4b0 My Balance": "balance",
         "\U0001f4b3 Buy Credits": "buy",
         "\U0001f4cb My History": "history",
@@ -71,12 +71,12 @@ async def handle_text(update: Update, context):
         route = routes[text]
         if route == "lookup":
             await update.message.reply_text(
-                "\U0001f50d <b>Enter Instagram Username:</b>\n\n"
-                "Type the username (without @):\n"
-                "Example: <code>cristiano</code>",
+                "\U0001f50d <b>Enter Phone Number:</b>\n\n"
+                "Type the 10-digit phone number:\n"
+                "Example: <code>9876543210</code>",
                 parse_mode="HTML",
             )
-            context.user_data["awaiting_username"] = True
+            context.user_data["awaiting_number"] = True
         elif route == "balance":
             await balance(update, context)
         elif route == "buy":
@@ -104,9 +104,9 @@ async def handle_text(update: Update, context):
         await admin_routes[text](update, context)
         return
 
-    # If awaiting username for lookup
-    if context.user_data.get("awaiting_username"):
-        context.user_data.pop("awaiting_username", None)
+    # If awaiting number for lookup
+    if context.user_data.get("awaiting_number"):
+        context.user_data.pop("awaiting_number", None)
         await handle_lookup(update, context)
         return
 
@@ -155,7 +155,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
-    print("\U0001f680 OSINT Instagram Bot is starting...")
+    print("\U0001f680 Phone OSINT Bot is starting...")
     print(f"\U0001f464 Admin IDs: {ADMIN_IDS}")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
