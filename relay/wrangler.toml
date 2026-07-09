@@ -1,0 +1,6 @@
+name = "osint-api-relay"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# No special permissions needed for this worker
+# It only makes outbound fetch requests

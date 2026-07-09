@@ -5,6 +5,7 @@ import asyncio
 from collections import defaultdict
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 
 import database as db
 import api_client
@@ -269,7 +270,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\U0001f4b0 <b>Your Balance:</b> {credits_text} credits\n\n"
             "Choose an option \u2193"
         )
-        await query.edit_message_text(text, reply_markup=back_button(), parse_mode="HTML")
+        try:
+            await query.edit_message_text(text, reply_markup=back_button(), parse_mode="HTML")
+        except BadRequest:
+            await query.message.reply_text(text, reply_markup=back_button(), parse_mode="HTML")
         return
 
     # Buy credits package selection
@@ -291,7 +295,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Include your <b>User ID</b> in the payment reference."
         )
         context.user_data["pending_package"] = package_key
-        await query.edit_message_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
+        try:
+            await query.edit_message_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
+        except BadRequest:
+            # Photo messages can't be edited as text - send new message
+            await query.message.reply_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
         return
 
     # Confirm payment - awaiting screenshot
@@ -302,26 +310,36 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.user_data["awaiting_screenshot"] = package_key
         pkg = CREDIT_PACKAGES[package_key]
-        await query.edit_message_text(
+        msg_text = (
             f"\U0001f4f8 <b>Send payment screenshot</b>\n\n"
             f"You selected: <b>{pkg['label']}</b> (\u20b9{pkg['price']})\n\n"
             "Upload the payment confirmation screenshot now.\n"
             "Make sure the screenshot shows:\n"
             "\u2022 UPI ID paid to\n"
             "\u2022 Amount\n"
-            "\u2022 Transaction reference/ID",
-            parse_mode="HTML",
+            "\u2022 Transaction reference/ID"
         )
+        try:
+            await query.edit_message_text(msg_text, parse_mode="HTML")
+        except BadRequest:
+            # Photo messages can't be edited as text - send new message
+            await query.message.reply_text(msg_text, parse_mode="HTML")
         return
 
     # Cancel payment
     if data == "cancel_payment":
         context.user_data.pop("awaiting_screenshot", None)
         context.user_data.pop("pending_package", None)
-        await query.edit_message_text(
-            "\u274c Payment cancelled.\n\nChoose an option:",
-            reply_markup=back_button(),
-        )
+        try:
+            await query.edit_message_text(
+                "\u274c Payment cancelled.\n\nChoose an option:",
+                reply_markup=back_button(),
+            )
+        except BadRequest:
+            await query.message.reply_text(
+                "\u274c Payment cancelled.\n\nChoose an option:",
+                reply_markup=back_button(),
+            )
         return
 
     # Admin: Approve transaction
@@ -349,11 +367,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-        await query.edit_message_text(
-            f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
-            f"Credits added: {tx['credits_added'] if row else 'N/A'}",
-            parse_mode="HTML",
-        )
+        try:
+            await query.edit_message_text(
+                f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
+                f"Credits added: {tx['credits_added'] if row else 'N/A'}",
+                parse_mode="HTML",
+            )
+        except BadRequest:
+            await query.message.reply_text(
+                f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
+                f"Credits added: {tx['credits_added'] if row else 'N/A'}",
+                parse_mode="HTML",
+            )
         return
 
     # Admin: Reject transaction
@@ -380,22 +405,34 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-        await query.edit_message_text(f"\u274c <b>Transaction #{tx_id} Rejected</b>", parse_mode="HTML")
+        try:
+            await query.edit_message_text(f"\u274c <b>Transaction #{tx_id} Rejected</b>", parse_mode="HTML")
+        except BadRequest:
+            await query.message.reply_text(f"\u274c <b>Transaction #{tx_id} Rejected</b>", parse_mode="HTML")
         return
 
     # Admin: Confirm ban
     if data.startswith("doban_"):
         ban_uid = int(data.replace("doban_", ""))
         db.ban_user(ban_uid)
-        await query.edit_message_text(
-            f"\U0001f6ab User <code>{ban_uid}</code> has been banned.",
-            parse_mode="HTML",
-        )
+        try:
+            await query.edit_message_text(
+                f"\U0001f6ab User <code>{ban_uid}</code> has been banned.",
+                parse_mode="HTML",
+            )
+        except BadRequest:
+            await query.message.reply_text(
+                f"\U0001f6ab User <code>{ban_uid}</code> has been banned.",
+                parse_mode="HTML",
+            )
         return
 
     # Cancel action
     if data == "cancel_action":
-        await query.edit_message_text("\u274c Action cancelled.", reply_markup=back_button())
+        try:
+            await query.edit_message_text("\u274c Action cancelled.", reply_markup=back_button())
+        except BadRequest:
+            await query.message.reply_text("\u274c Action cancelled.", reply_markup=back_button())
         return
 
     # Export report as image + PDF

@@ -7,9 +7,13 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 
 # OSINT APIs
-OSINT_API_NUMBER_URL = "https://ft-osint-api.duckdns.org/api/number"
-OSINT_API_NUMLEAK_URL = "https://ft-osint-api.duckdns.org/api/numleak"
+OSINT_API_NUMBER_URL = os.getenv("OSINT_API_NUMBER_URL", "https://ft-osint-api.duckdns.org/api/number")
+OSINT_API_NUMLEAK_URL = os.getenv("OSINT_API_NUMLEAK_URL", "https://ft-osint-api.duckdns.org/api/numleak")
 OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi")
+
+# Optional API relay/proxy URL (set this if Railway blocks direct API access)
+# Example: "https://your-relay.workers.dev/proxy" or "http://your-vps:8080/proxy"
+API_RELAY_URL = os.getenv("API_RELAY_URL", "")
 
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")

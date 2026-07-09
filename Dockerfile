@@ -1,10 +1,12 @@
 FROM python:3.11-slim
 
-# Install system dependencies for Pillow, fonts, and curl (used for API calls)
+# Install system dependencies for Pillow, fonts, curl, and build tools for curl_cffi
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-liberation \
     curl \
+    build-essential \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

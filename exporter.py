@@ -227,7 +227,6 @@ def generate_report_image(data: dict) -> io.BytesIO:
         ("Number", number),
         ("Total Records", _format_number(total)),
         ("Status", "DATA FOUND" if results else "NO DATA"),
-        ("Source", _safe(number_data.get("by", "Unknown"))),
     ]
 
     for label, value in info_fields:
@@ -352,12 +351,7 @@ def generate_report_image(data: dict) -> io.BytesIO:
         y = _draw_divider(draw, y)
 
     # === FOOTER ===
-    draw.text(
-        (PADDING, y),
-        f"Source: {_safe(number_data.get('by', 'Unknown'))} | Channel: {_safe(number_data.get('channel', 'N/A'))}",
-        font=font_small, fill=TEXT_SECONDARY
-    )
-    y += 30
+    y += 10
 
     # === WATERMARK / BRANDING ===
     watermark_y = y + 10

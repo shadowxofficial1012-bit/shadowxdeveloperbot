@@ -171,8 +171,6 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
     pdf.label_value("Total Records", str(total), value_color=NEON_YELLOW if results else NEON_RED)
     pdf.label_value("Status", "DATA FOUND" if results else "NO DATA",
                     value_color=NEON_GREEN if results else NEON_RED)
-    pdf.label_value("Source", safe_str(number_data.get("by", "Unknown")))
-    pdf.label_value("Channel", safe_str(number_data.get("channel", "N/A")))
     pdf.ln(2)
     pdf.divider()
 
@@ -273,7 +271,6 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(*TEXT_DIM)
     pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
-    pdf.cell(0, 4, f"  Developed by @shadowxdeveloper", ln=True)
 
     # Save to BytesIO
     buffer = io.BytesIO()

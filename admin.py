@@ -93,7 +93,7 @@ async def admin_add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Add credits to a user (admin)."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "add_credits"
+    context.user_data["admin_action"] = "add_credits"
     await update.message.reply_text(
         "Send: <b>user_id amount</b>\nExample: <code>123456789 10</code>",
         reply_markup=admin_keyboard(),
@@ -105,7 +105,7 @@ async def admin_set_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Set exact credits for a user."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "set_credits"
+    context.user_data["admin_action"] = "set_credits"
     await update.message.reply_text(
         "Send: <b>user_id amount</b>\nExample: <code>123456789 50</code>",
         reply_markup=admin_keyboard(),
@@ -117,7 +117,7 @@ async def admin_reset_credits(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Reset user credits to 0."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "reset_credits"
+    context.user_data["admin_action"] = "reset_credits"
     await update.message.reply_text(
         "Send the <b>user_id</b> to reset credits to 0:",
         reply_markup=admin_keyboard(),
@@ -129,7 +129,7 @@ async def admin_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ban a user."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "ban_user"
+    context.user_data["admin_action"] = "ban_user"
     await update.message.reply_text(
         "Send the <b>user_id</b> to ban:",
         reply_markup=admin_keyboard(),
@@ -141,7 +141,7 @@ async def admin_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unban a user."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "unban_user"
+    context.user_data["admin_action"] = "unban_user"
     await update.message.reply_text(
         "Send the <b>user_id</b> to unban:",
         reply_markup=admin_keyboard(),
@@ -153,7 +153,7 @@ async def admin_user_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Look up a user by ID."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "user_lookup"
+    context.user_data["admin_action"] = "user_lookup"
     await update.message.reply_text(
         "Send a <b>user_id</b> to look up:",
         reply_markup=admin_keyboard(),
@@ -213,7 +213,7 @@ async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Broadcast a message to all users."""
     if not is_admin(update.effective_user.id):
         return
-    context.admin_action = "broadcast_confirm"
+    context.user_data["admin_action"] = "broadcast_confirm"
     await update.message.reply_text(
         "\U0001f4e2 <b>Broadcast Message</b>\n\n"
         "Type the message to send to ALL users:",
@@ -227,14 +227,14 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return False
 
-    action = getattr(context, "admin_action", None)
+    action = context.user_data.get("admin_action")
     if not action:
         return False
 
     text = update.message.text.strip()
 
     if text in ("\U0001f519 Main Menu", "\u21a9\ufe0f Back"):
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         await update.message.reply_text(
             "\U0001f3f7\ufe0f <b>Admin Panel</b>", reply_markup=admin_keyboard(), parse_mode="HTML"
         )
@@ -258,7 +258,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"New balance: {db.get_credits(uid)}",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "set_credits":
@@ -278,7 +278,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\u2705 Set credits for user <code>{uid}</code> to <b>{amount}</b>.",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "reset_credits":
@@ -292,7 +292,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\u2705 Reset credits for user <code>{uid}</code> to 0.",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "ban_user":
@@ -306,7 +306,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\U0001f6ab User <code>{uid}</code> has been banned.",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "unban_user":
@@ -320,7 +320,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\u2705 User <code>{uid}</code> has been unbanned.",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "user_lookup":
@@ -333,7 +333,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db_user = db.get_or_create_user(uid)
         if not db_user:
             await update.message.reply_text("\u274c User not found.", reply_markup=admin_keyboard())
-            context.admin_action = None
+            context.user_data["admin_action"] = None
             return True
 
         status = "\U0001f6ab Banned" if db_user["is_banned"] else "\u2705 Active"
@@ -358,17 +358,17 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "\u274c Broadcast cancelled.",
                 reply_markup=admin_keyboard(), parse_mode="HTML",
             )
-            context.admin_action = None
+            context.user_data["admin_action"] = None
             return True
 
-        # Get the broadcast message from context
-        broadcast_msg = getattr(context, "broadcast_message", None)
+        # Get the broadcast message from user_data
+        broadcast_msg = context.user_data.get("broadcast_message")
         if not broadcast_msg:
             await update.message.reply_text(
                 "\u274c No broadcast message found.",
                 reply_markup=admin_keyboard(), parse_mode="HTML",
             )
-            context.admin_action = None
+            context.user_data["admin_action"] = None
             return True
 
         users = db.get_all_users()
@@ -397,13 +397,13 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\U0001f465 Total: {len(users)}",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
-        context.admin_action = None
-        context.broadcast_message = None
+        context.user_data["admin_action"] = None
+        context.user_data.pop("broadcast_message", None)
         return True
 
     if action == "broadcast_confirm":
-        context.broadcast_message = text
-        context.admin_action = "broadcast"
+        context.user_data["broadcast_message"] = text
+        context.user_data["admin_action"] = "broadcast"
         await update.message.reply_text(
             f"\U0001f4e2 <b>Broadcast Preview:</b>\n\n"
             f"{text}\n\n"

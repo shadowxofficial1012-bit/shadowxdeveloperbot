@@ -2,7 +2,7 @@ import logging
 import json
 import asyncio
 from urllib.parse import urlencode
-from config import OSINT_API_NUMBER_URL, OSINT_API_NUMLEAK_URL, OSINT_API_KEY
+from config import OSINT_API_NUMBER_URL, OSINT_API_NUMLEAK_URL, OSINT_API_KEY, API_RELAY_URL
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,19 @@ HEADERS = {
 
 
 def _fetch_cffi(url: str, params: dict) -> dict:
-    """Fetch data using curl_cffi (bypasses TLS fingerprinting)."""
+    """Fetch data using curl_cffi (bypasses TLS fingerprinting). Supports relay proxy."""
     try:
         from curl_cffi import requests as cffi_requests
-        resp = cffi_requests.get(
-            url, params=params, headers=HEADERS, impersonate="chrome", timeout=30
-        )
+        # If relay URL is set, proxy the request through it
+        if API_RELAY_URL:
+            resp = cffi_requests.get(
+                API_RELAY_URL, params={"url": url, **params}, headers=HEADERS,
+                impersonate="chrome", timeout=30
+            )
+        else:
+            resp = cffi_requests.get(
+                url, params=params, headers=HEADERS, impersonate="chrome", timeout=30
+            )
         if resp.status_code == 200:
             data = resp.json()
             if data.get("results") or data.get("chain") or data.get("calltracer"):
@@ -42,10 +49,16 @@ def _fetch_cffi(url: str, params: dict) -> dict:
 
 
 def _fetch_requests(url: str, params: dict) -> dict:
-    """Fetch data using requests library."""
+    """Fetch data using requests library. Supports relay proxy."""
     try:
         import requests
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        # If relay URL is set, proxy the request through it
+        if API_RELAY_URL:
+            resp = requests.get(
+                API_RELAY_URL, params={"url": url, **params}, headers=HEADERS, timeout=30
+            )
+        else:
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
         if resp.status_code == 200:
             data = resp.json()
             if data.get("results") or data.get("chain") or data.get("calltracer"):
@@ -63,9 +76,15 @@ def _fetch_requests(url: str, params: dict) -> dict:
 
 
 async def _fetch_curl(url: str, params: dict) -> dict:
-    """Fetch data using curl via async subprocess."""
-    param_str = urlencode(params)
-    full_url = f"{url}?{param_str}"
+    """Fetch data using curl via async subprocess. Supports relay proxy."""
+    # If relay URL is set, proxy through it
+    if API_RELAY_URL:
+        relay_params = {"url": url, **params}
+        param_str = urlencode(relay_params)
+        full_url = f"{API_RELAY_URL}?{param_str}"
+    else:
+        param_str = urlencode(params)
+        full_url = f"{url}?{param_str}"
     try:
         proc = await asyncio.create_subprocess_exec(
             "curl", "-s", "--max-time", "30",
@@ -124,6 +143,10 @@ async def lookup_number(number: str) -> dict:
         result = await _fetch_with_fallback(OSINT_API_NUMBER_URL, params)
         if result["success"]:
             return result
+        # Don't retry on 403 Forbidden - API is blocking us
+        if "403" in str(result.get("error", "")):
+            logger.warning("API returned 403 - stopping retries")
+            break
         if attempt < MAX_RETRIES - 1:
             logger.info(f"Retry {attempt + 1}/{MAX_RETRIES} for number lookup...")
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))
@@ -137,6 +160,10 @@ async def lookup_numleak(number: str) -> dict:
         result = await _fetch_with_fallback(OSINT_API_NUMLEAK_URL, params)
         if result["success"]:
             return result
+        # Don't retry on 403 Forbidden - API is blocking us
+        if "403" in str(result.get("error", "")):
+            logger.warning("API returned 403 - stopping retries")
+            break
         if attempt < MAX_RETRIES - 1:
             logger.info(f"Retry {attempt + 1}/{MAX_RETRIES} for numleak lookup...")
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))

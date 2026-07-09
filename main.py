@@ -7,6 +7,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters,
 )
+from telegram.error import Conflict, TimedOut, NetworkError
 
 import database as db
 from config import BOT_TOKEN, ADMIN_IDS
@@ -43,6 +44,28 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+async def error_handler(update: object, context) -> None:
+    """Handle errors gracefully."""
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+
+    if isinstance(context.error, Conflict):
+        logger.warning("Conflict detected - another instance may be running. Retrying...")
+        return  # Just log and continue
+    
+    if isinstance(context.error, (TimedOut, NetworkError)):
+        logger.warning(f"Network error: {context.error}")
+        return
+
+    # For other errors, try to notify the user if possible
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "\u26a0\ufe0f An error occurred. Please try again."
+            )
+        except Exception:
+            pass
 
 
 async def handle_text(update: Update, context):
@@ -170,9 +193,18 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
+    # Add error handler
+    app.add_error_handler(error_handler)
+
     print("\U0001f680 Phone OSINT Bot is starting...")
     print(f"\U0001f464 Admin IDs: {ADMIN_IDS}")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+        poll_interval=2.0,
+        read_timeout=10,
+        connect_timeout=10,
+    )
 
 
 if __name__ == "__main__":
