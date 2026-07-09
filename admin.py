@@ -175,13 +175,18 @@ async def admin_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    ACTIVE_EMOJI = "\u2705"
+    INACTIVE_EMOJI = "\u26a0\ufe0f"
+    BANNED_EMOJI = "\U0001f6ab"
     text = f"\U0001f465 <b>All Users ({len(users)})</b>\n\n"
     for i, u in enumerate(users[:20], 1):
-        status = "\U0001f6ab" if u.get("is_banned") else "\u2705"
+        status = BANNED_EMOJI if u.get("is_banned") else "\u2705"
         username = f"@{u['username']}" if u.get("username") else "N/A"
+        is_active = u.get('subscription_expiry') and u['subscription_expiry'] > datetime.now().isoformat()[:19]
+        sub_status = f"{ACTIVE_EMOJI} Active" if is_active else f"{INACTIVE_EMOJI} Inactive"
         text += (
             f"{status} <code>{u['user_id']}</code> | {username}\n"
-            f"   {'\u2705 Active' if u.get('subscription_expiry') and u['subscription_expiry'] > datetime.now().isoformat()[:19] else '\u26a0\ufe0f Inactive'} | \U0001f50d {u.get('total_lookups', 0)} lookups\n"
+            f"   {sub_status} | \U0001f50d {u.get('total_lookups', 0)} lookups\n"
         )
     if len(users) > 20:
         text += f"\n... and {len(users) - 20} more users"
