@@ -368,7 +368,7 @@ def generate_report_image(data: dict) -> io.BytesIO:
     font_brand = _get_font(16, bold=True)
     draw.text(
         (PADDING, watermark_y + 14),
-        f"{'=' * 3} {BRAND_NAME} {'=' * 3}",
+        f"{'=' * 3} @HATHI02 {'=' * 3}",
         font=font_brand, fill=TEXT_ACCENT
     )
     bbox_tag = draw.textbbox((0, 0), BRAND_TAGLINE, font=font_small)

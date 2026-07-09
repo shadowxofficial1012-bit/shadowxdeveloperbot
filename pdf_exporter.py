@@ -206,7 +206,7 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
     pdf.divider()
     pdf.set_font("Courier", "", 8)
     pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 5, f"  Powered by @{BRAND_NAME}", ln=True)
+    pdf.cell(0, 5, f"  Powered by @HATHI02", ln=True)
     pdf.cell(0, 5, f"  Developed by @shadowxdeveloper", ln=True)
 
     # Save to BytesIO
@@ -326,7 +326,7 @@ def generate_text_report(data: dict) -> str:
 
     # Footer
     lines.append("=" * 50)
-    lines.append(f"Powered by @{BRAND_NAME}")
+    lines.append(f"Powered by @HATHI02")
     lines.append(f"Developed by @shadowxdeveloper")
 
     return "\n".join(lines)

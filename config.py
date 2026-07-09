@@ -36,6 +36,6 @@ DB_PATH = os.getenv("DB_PATH", "osint_bot.db")
 QR_CODE_PATH = os.getenv("QR_CODE_PATH", "media/qr_code.png")
 
 # Export Image Branding
-BRAND_NAME = os.getenv("BRAND_NAME", "OSINT Bot")
+BRAND_NAME = os.getenv("BRAND_NAME", "HATHI02")
 BRAND_TAGLINE = os.getenv("BRAND_TAGLINE", "Phone Number OSINT Report")
 LOGO_PATH = os.getenv("LOGO_PATH", "media/logo.png")
