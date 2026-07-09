@@ -17,7 +17,7 @@ from keyboards import (
     history_list_keyboard,
     reexport_keyboard,
 )
-from config import CREDIT_PACKAGES, UPI_ID, UPI_NAME, FREE_CREDITS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE
+from config import CREDIT_PACKAGES, UPI_ID, UPI_NAME, FREE_CREDITS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +118,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_new:
         welcome += f"\U0001f381 You received <b>{FREE_CREDITS} FREE credits</b> to get started!\n\n"
 
+    credits_display = "\u221e Unlimited" if user.id in ADMIN_IDS else str(db_user['credits'])
     welcome += (
-        f"\U0001f4b0 <b>Your Balance:</b> {db_user['credits']} credits\n\n"
+        f"\U0001f4b0 <b>Your Balance:</b> {credits_display} credits\n\n"
         "Choose an option below \u2193"
     )
 
@@ -176,16 +177,22 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     db.get_or_create_user(user.id, user.username, user.first_name)
     credits = db.get_credits(user.id)
+    is_admin_user = user.id in ADMIN_IDS
 
-    text = "\U0001f4b0 <b>Your Balance</b>\n\n"
-    text += f"\U0001f4b5 <b>Available Credits:</b> <b>{credits}</b>\n\n"
-
-    if credits <= 0:
-        text += "\u26a0\ufe0f You have <b>no credits</b> left!\nBuy more credits to continue."
-    elif credits <= 1:
-        text += "\u26a0\ufe0f Very few credits left. Consider buying more."
+    if is_admin_user:
+        text = "\U0001f4b0 <b>Your Balance</b>\n\n"
+        text += "\U0001f4b5 <b>Available Credits:</b> <b>\u221e Unlimited</b>\n\n"
+        text += "\u2705 Admin account — unlimited lookups."
     else:
-        text += f"You can perform <b>{credits}</b> more lookups."
+        text = "\U0001f4b0 <b>Your Balance</b>\n\n"
+        text += f"\U0001f4b5 <b>Available Credits:</b> <b>{credits}</b>\n\n"
+
+        if credits <= 0:
+            text += "\u26a0\ufe0f You have <b>no credits</b> left!\nBuy more credits to continue."
+        elif credits <= 1:
+            text += "\u26a0\ufe0f Very few credits left. Consider buying more."
+        else:
+            text += f"You can perform <b>{credits}</b> more lookups."
 
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
@@ -248,12 +255,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Back to main menu
     if data == "back_main":
         db_user = db.get_or_create_user(user.id, user.username, user.first_name)
+        credits_text = "\u221e" if user.id in ADMIN_IDS else str(db_user['credits'])
         text = (
             f"\U0001f44b Hey, <b>{user.first_name}</b>!\n\n"
-            f"\U0001f4b0 <b>Your Balance:</b> {db_user['credits']} credits\n\n"
+            f"\U0001f4b0 <b>Your Balance:</b> {credits_text} credits\n\n"
             "Choose an option \u2193"
         )
-        await query.edit_message_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await query.edit_message_text(text, reply_markup=back_button(), parse_mode="HTML")
         return
 
     # Buy credits package selection
@@ -304,7 +312,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("pending_package", None)
         await query.edit_message_text(
             "\u274c Payment cancelled.\n\nChoose an option:",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_button(),
         )
         return
 
@@ -479,6 +487,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone number lookup with full code-formatted output."""
     user = update.effective_user
+    is_admin_user = user.id in ADMIN_IDS
 
     # Check if banned
     if db.is_banned(user.id):
@@ -488,17 +497,17 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check credits
-    credits = db.get_credits(user.id)
-    if credits <= 0:
-        await update.message.reply_text(
-            "\u26a0\ufe0f <b>No Credits!</b>\n\n"
-            "You have no credits left.\n"
-            "Buy more credits to continue using the bot.",
-            reply_markup=main_menu_keyboard(),
-            parse_mode="HTML",
-        )
-        return
+    # Check credits (admins skip credit check)
+    if not is_admin_user:
+        credits = db.get_credits(user.id)
+        if credits <= 0:
+            await update.message.reply_text(
+                "\u26a0\ufe0f <b>No Credits!</b>\n\n"
+                "You have no credits left.\n"
+                "Buy more credits to continue using the bot.",
+                reply_markup=main_menu_keyboard(), parse_mode="HTML",
+            )
+            return
 
     # Rate limit check
     allowed, wait_secs = _check_rate_limit(user.id)
@@ -563,13 +572,14 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Use one credit
-    if not db.use_credit(user.id):
-        await loading_msg.edit_text(
-            "\u26a0\ufe0f <b>Credits exhausted</b> during lookup.\nBuy more credits.",
-            parse_mode="HTML",
-        )
-        return
+    # Use one credit (admins skip credit deduction)
+    if not is_admin_user:
+        if not db.use_credit(user.id):
+            await loading_msg.edit_text(
+                "\u26a0\ufe0f <b>Credits exhausted</b> during lookup.\nBuy more credits.",
+                parse_mode="HTML",
+            )
+            return
 
     # Record this lookup for rate limiting
     _record_lookup(user.id)
@@ -632,9 +642,10 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # PART 3: Summary header
+    credits_remaining = "\u221e" if is_admin_user else str(db.get_credits(user.id))
     header = (
         f"\U0001f4f1 <b>Lookup Complete for {phone_number}</b>\n"
-        f"Credits remaining: <b>{db.get_credits(user.id)}</b>"
+        f"Credits remaining: <b>{credits_remaining}</b>"
     )
     await update.message.reply_text(
         header,
