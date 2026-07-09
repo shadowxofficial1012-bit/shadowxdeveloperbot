@@ -390,35 +390,46 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("\u274c Action cancelled.", reply_markup=back_button())
         return
 
-    # Export report as image
+    # Export report as image + PDF
     if data.startswith("export_"):
         export_number = data.replace("export_", "")
         lookup_data = context.user_data.get("last_lookup")
         if not lookup_data:
             await query.edit_message_text(
                 "\u274c No data to export. Please run a lookup first.",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=back_button(),
             )
             return
 
-        await query.answer("\U0001f4f7 Generating report image...")
+        await query.answer("\U0001f4f7 Generating reports...")
 
+        # Send image report
         try:
             from exporter import generate_report_image
             image_buffer = generate_report_image(lookup_data)
             await context.bot.send_photo(
                 chat_id=query.message.chat.id,
                 photo=image_buffer,
-                caption=f"\U0001f4f7 <b>OSINT Report</b> for {export_number}",
+                caption=f"\U0001f4f7 <b>Image Report</b> for {export_number}",
                 parse_mode="HTML",
             )
         except Exception as e:
-            logger.error(f"Export failed: {e}")
-            await query.edit_message_text(
-                f"\u274c <b>Export failed</b>\n\nError: {str(e)[:200]}",
-                reply_markup=main_menu_keyboard(),
+            logger.error(f"Image export failed: {e}")
+
+        # Send PDF report
+        try:
+            from pdf_exporter import generate_osint_pdf
+            pdf_buffer = generate_osint_pdf(lookup_data)
+            await context.bot.send_document(
+                chat_id=query.message.chat.id,
+                document=pdf_buffer,
+                filename=f"OSINT_{export_number}.pdf",
+                caption=f"\U0001f4c4 <b>PDF Report</b> for {export_number}",
                 parse_mode="HTML",
             )
+        except Exception as e:
+            logger.error(f"PDF export failed: {e}")
+
         return
 
     # History: show lookup list
