@@ -23,15 +23,15 @@ ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
 UPI_ID = os.getenv("UPI_ID", "yourupi@paytm")
 UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
-# Credit Packages
-CREDIT_PACKAGES = {
-    "daily": {"credits": 10, "price": 10, "label": "1 Day Pack"},
-    "weekly": {"credits": 100, "price": 100, "label": "1 Week Pack"},
-    "monthly": {"credits": 200, "price": 200, "label": "1 Month Pack"},
+# Subscription Packages (unlimited searches for duration)
+SUBSCRIPTION_PACKAGES = {
+    "daily": {"duration_hours": 24, "price": 10, "label": "1 Day Pack"},
+    "weekly": {"duration_hours": 168, "price": 100, "label": "1 Week Pack"},
+    "monthly": {"duration_hours": 720, "price": 200, "label": "1 Month Pack"},
 }
 
-# Free credits for new users
-FREE_CREDITS = 3
+# Free trial hours for new users (24 hours of free unlimited searches)
+FREE_TRIAL_HOURS = 0
 
 # Database - use relative path for Railway compatibility
 DB_PATH = os.getenv("DB_PATH", "osint_bot.db")

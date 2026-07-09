@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -95,7 +96,7 @@ async def admin_add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     context.user_data["admin_action"] = "add_credits"
     await update.message.reply_text(
-        "Send: <b>user_id amount</b>\nExample: <code>123456789 10</code>",
+        "Send: <b>user_id hours</b>\nExample: <code>123456789 24</code>",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
@@ -180,7 +181,7 @@ async def admin_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = f"@{u['username']}" if u.get("username") else "N/A"
         text += (
             f"{status} <code>{u['user_id']}</code> | {username}\n"
-            f"   \U0001f4b0 {u['credits']} credits | \U0001f50d {u.get('total_lookups', 0)} lookups\n"
+            f"   {'\u2705 Active' if u.get('subscription_expiry') and u['subscription_expiry'] > datetime.now().isoformat()[:19] else '\u26a0\ufe0f Inactive'} | \U0001f50d {u.get('total_lookups', 0)} lookups\n"
         )
     if len(users) > 20:
         text += f"\n... and {len(users) - 20} more users"
@@ -243,41 +244,45 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "add_credits":
         parts = text.split()
         if len(parts) != 2:
-            await update.message.reply_text("\u274c Format: <code>user_id amount</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
+            await update.message.reply_text("\u274c Format: <code>user_id hours</code>\nExample: <code>123456789 24</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
         try:
             uid = int(parts[0])
-            amount = int(parts[1])
+            hours = int(parts[1])
         except ValueError:
             await update.message.reply_text("\u274c Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
 
-        db.add_credits(uid, amount)
-        await update.message.reply_text(
-            f"\u2705 Added <b>{amount}</b> credits to user <code>{uid}</code>.\n"
-            f"New balance: {db.get_credits(uid)}",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
+        expiry = db.set_subscription(uid, hours)
+        try:
+            exp_dt = datetime.fromisoformat(expiry)
+            msg = f"\u2705 Added <b>{hours}h</b> subscription to user <code>{uid}</code>.\nExpires: {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
+        except:
+            msg = f"\u2705 Added <b>{hours}h</b> subscription to user <code>{uid}</code>."
+        await update.message.reply_text(msg, reply_markup=admin_keyboard(), parse_mode="HTML")
         context.user_data["admin_action"] = None
         return True
 
     if action == "set_credits":
         parts = text.split()
         if len(parts) != 2:
-            await update.message.reply_text("\u274c Format: <code>user_id amount</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
+            await update.message.reply_text("\u274c Format: <code>user_id hours</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
         try:
             uid = int(parts[0])
-            amount = int(parts[1])
+            hours = int(parts[1])
         except ValueError:
             await update.message.reply_text("\u274c Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
 
-        db.set_credits(uid, amount)
-        await update.message.reply_text(
-            f"\u2705 Set credits for user <code>{uid}</code> to <b>{amount}</b>.",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
+        # Set a fresh subscription (set_subscription extends from now if expired)
+        expiry = db.set_subscription(uid, hours)
+        try:
+            exp_dt = datetime.fromisoformat(expiry)
+            msg = f"\u2705 Set subscription for user <code>{uid}</code> to <b>{hours}h</b>.\nExpires: {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
+        except:
+            msg = f"\u2705 Set subscription for user <code>{uid}</code> to <b>{hours}h</b>."
+        await update.message.reply_text(msg, reply_markup=admin_keyboard(), parse_mode="HTML")
         context.user_data["admin_action"] = None
         return True
 
@@ -287,9 +292,14 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await update.message.reply_text("\u274c Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
-        db.set_credits(uid, 0)
+        # Expire the user's subscription by setting empty
+        conn = db.get_db()
+        c = conn.cursor()
+        c.execute("UPDATE users SET subscription_expiry = ? WHERE user_id = ?", ("", uid))
+        conn.commit()
+        conn.close()
         await update.message.reply_text(
-            f"\u2705 Reset credits for user <code>{uid}</code> to 0.",
+            f"\u2705 Expired subscription for user <code>{uid}</code>.",
             reply_markup=admin_keyboard(), parse_mode="HTML",
         )
         context.user_data["admin_action"] = None
@@ -337,19 +347,21 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return True
 
         status = "\U0001f6ab Banned" if db_user["is_banned"] else "\u2705 Active"
+        sub_status = "\u2705 Active" if db.has_active_subscription(uid) else "\u26a0\ufe0f Expired/None"
+        sub_expiry = db.get_subscription_expiry(uid) or "N/A"
         text_msg = (
             f"\U0001f464 <b>User Info</b>\n\n"
             f"<b>User ID:</b> <code>{db_user['user_id']}</code>\n"
             f"<b>Username:</b> @{db_user['username'] or 'N/A'}\n"
             f"<b>Name:</b> {db_user['first_name'] or 'N/A'}\n"
-            f"<b>Credits:</b> {db_user['credits']}\n"
+            f"<b>Subscription:</b> {sub_status}\n"
+            f"<b>Expires:</b> {sub_expiry[:16] if sub_expiry != 'N/A' else 'N/A'}\n"
             f"<b>Lookups:</b> {db_user['total_lookups']}\n"
-            f"<b>Status:</b> {status}\n"
             f"<b>Joined:</b> {db_user['created_at'][:10]}\n"
             f"<b>Last Active:</b> {db_user['last_active'][:16]}"
         )
         await update.message.reply_text(text_msg, reply_markup=admin_keyboard(), parse_mode="HTML")
-        context.admin_action = None
+        context.user_data["admin_action"] = None
         return True
 
     if action == "broadcast":

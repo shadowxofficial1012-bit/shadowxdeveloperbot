@@ -4,14 +4,14 @@ from telegram import (
     ReplyKeyboardMarkup,
     KeyboardButton,
 )
-from config import CREDIT_PACKAGES
+from config import SUBSCRIPTION_PACKAGES
 
 
 def main_menu_keyboard():
     """Main menu reply keyboard."""
     keyboard = [
         [KeyboardButton("\U0001f50d Phone Lookup"), KeyboardButton("\U0001f4ca Demo Result")],
-        [KeyboardButton("\U0001f4b0 My Balance"), KeyboardButton("\U0001f4b3 Buy Credits")],
+        [KeyboardButton("\U0001f4b0 My Balance"), KeyboardButton("\U0001f4b3 Buy Access")],
         [KeyboardButton("\U0001f4cb My History"), KeyboardButton("\U0001f4dd Help")],
         [KeyboardButton("\U0001f464 Profile")],
     ]
@@ -22,8 +22,8 @@ def admin_keyboard():
     """Admin panel reply keyboard."""
     keyboard = [
         [KeyboardButton("\U0001f4ca Stats"), KeyboardButton("\U0001f4e6 Pending Payments")],
-        [KeyboardButton("\U0001f464 User Lookup"), KeyboardButton("\U0001f4b0 Add Credits")],
-        [KeyboardButton("\U0001f48e Set Credits"), KeyboardButton("\U0001f4b1 Reset Credits")],
+        [KeyboardButton("\U0001f464 User Lookup"), KeyboardButton("\U0001f4b0 Add Access")],
+        [KeyboardButton("\u23f0 Add Hours")],
         [KeyboardButton("\U0001f6ab Ban User"), KeyboardButton("\U0001f51a Unban User")],
         [KeyboardButton("\U0001f465 All Users"), KeyboardButton("\U0001f50d Lookup Logs")],
         [KeyboardButton("\U0001f4e2 Broadcast"), KeyboardButton("\U0001f519 Main Menu")],
@@ -32,10 +32,10 @@ def admin_keyboard():
 
 
 def buy_credits_keyboard():
-    """Inline keyboard for credit packages."""
+    """Inline keyboard for subscription packages."""
     buttons = []
-    for key, pkg in CREDIT_PACKAGES.items():
-        text = f"\U0001f4b0 {pkg['label']} \u2014 {pkg['credits']} credits \u2022 \u20b9{pkg['price']}"
+    for key, pkg in SUBSCRIPTION_PACKAGES.items():
+        text = f"\U0001f4b0 {pkg['label']} \u2014 Unlimited \u2022 \u20b9{pkg['price']}"
         buttons.append([InlineKeyboardButton(text, callback_data=f"buy_{key}")])
     buttons.append([InlineKeyboardButton("\u21a9\ufe0f Back", callback_data="back_main")])
     return InlineKeyboardMarkup(buttons)

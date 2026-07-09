@@ -1,7 +1,8 @@
 import os
 import sqlite3
 from datetime import datetime
-from config import DB_PATH, FREE_CREDITS
+from datetime import datetime, timedelta
+from config import DB_PATH, FREE_TRIAL_HOURS
 
 
 def get_db():
@@ -26,10 +27,17 @@ def init_db():
             credits INTEGER DEFAULT 0,
             total_lookups INTEGER DEFAULT 0,
             is_banned INTEGER DEFAULT 0,
+            subscription_expiry TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Add subscription_expiry column if missing (for existing DB migration)
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN subscription_expiry TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
@@ -81,8 +89,8 @@ def get_or_create_user(user_id, username=None, first_name=None):
 
     if user is None:
         c.execute(
-            "INSERT INTO users (user_id, username, first_name, credits) VALUES (?, ?, ?, ?)",
-            (user_id, username, first_name, FREE_CREDITS),
+            "INSERT INTO users (user_id, username, first_name, credits, subscription_expiry) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username, first_name, 0, ""),
         )
         conn.commit()
         c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
@@ -109,29 +117,66 @@ def get_or_create_user(user_id, username=None, first_name=None):
     return dict(user) if user else None
 
 
-def get_credits(user_id):
+def has_active_subscription(user_id):
+    """Check if a user has an active (non-expired) subscription."""
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT subscription_expiry FROM users WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     conn.close()
-    return row["credits"] if row else 0
+    if not row or not row["subscription_expiry"]:
+        return False
+    try:
+        expiry = datetime.fromisoformat(row["subscription_expiry"])
+        return datetime.now() < expiry
+    except (ValueError, TypeError):
+        return False
 
 
-def use_credit(user_id):
+def get_subscription_expiry(user_id):
+    """Get the subscription expiry date string for a user."""
     conn = get_db()
     c = conn.cursor()
-    c.execute("UPDATE users SET credits = credits - 1, total_lookups = total_lookups + 1 WHERE user_id = ? AND credits > 0", (user_id,))
-    changed = c.rowcount
+    c.execute("SELECT subscription_expiry FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row["subscription_expiry"] if row and row["subscription_expiry"] else ""
+
+
+def set_subscription(user_id, duration_hours):
+    """Set/extend a user's subscription. Extends from current expiry or now."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT subscription_expiry FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    
+    now = datetime.now()
+    if row and row["subscription_expiry"]:
+        try:
+            current_expiry = datetime.fromisoformat(row["subscription_expiry"])
+            if current_expiry > now:
+                # Extend from current expiry
+                new_expiry = current_expiry + timedelta(hours=duration_hours)
+            else:
+                # Expired, start from now
+                new_expiry = now + timedelta(hours=duration_hours)
+        except (ValueError, TypeError):
+            new_expiry = now + timedelta(hours=duration_hours)
+    else:
+        new_expiry = now + timedelta(hours=duration_hours)
+    
+    expiry_str = new_expiry.isoformat()
+    c.execute("UPDATE users SET subscription_expiry = ? WHERE user_id = ?", (expiry_str, user_id))
     conn.commit()
     conn.close()
-    return changed > 0
+    return expiry_str
 
 
-def add_credits(user_id, amount):
+def record_lookup(user_id):
+    """Increment the total_lookups counter for a user."""
     conn = get_db()
     c = conn.cursor()
-    c.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (amount, user_id))
+    c.execute("UPDATE users SET total_lookups = total_lookups + 1 WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 

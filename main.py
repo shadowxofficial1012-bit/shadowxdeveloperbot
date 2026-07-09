@@ -90,7 +90,8 @@ async def handle_text(update: Update, context):
     routes = {
         "\U0001f50d Phone Lookup": "lookup",
         "\U0001f4b0 My Balance": "balance",
-        "\U0001f4b3 Buy Credits": "buy",
+        "\U0001f4b3 Buy Access": "buy",
+        "\U0001f4b3 Buy Credits": "buy",  # Keep both for compatibility
         "\U0001f4cb My History": "history",
         "\U0001f4dd Help": "help",
         "\U0001f464 Profile": "profile",

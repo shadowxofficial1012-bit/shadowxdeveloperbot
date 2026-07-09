@@ -18,7 +18,8 @@ from keyboards import (
     history_list_keyboard,
     reexport_keyboard,
 )
-from config import CREDIT_PACKAGES, UPI_ID, UPI_NAME, FREE_CREDITS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
+from datetime import datetime
+from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     db_user = db.get_or_create_user(user.id, user.username, user.first_name)
 
-    is_new = db_user["total_lookups"] == 0 and db_user["credits"] == FREE_CREDITS
+    is_new = db_user["total_lookups"] == 0
 
     # Try to send branded header image
     try:
@@ -99,7 +100,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             brand_name=BRAND_NAME,
             tagline=BRAND_TAGLINE,
             logo_path=LOGO_PATH,
-            credits=db_user["credits"],
+            credits=0,
             is_new=is_new,
         )
         await update.message.reply_photo(
@@ -111,6 +112,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Send welcome text
     is_admin_user = user.id in ADMIN_IDS
+    has_access = is_admin_user or db.has_active_subscription(user.id)
+    
     welcome = (
         f"\U0001f44b Welcome, <b>{user.first_name}</b>!\n\n"
         f"\U0001f50d <b>Phone OSINT by @HATHI02</b>\n"
@@ -118,12 +121,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if is_new:
-        welcome += f"\U0001f381 You received <b>{FREE_CREDITS} FREE credits</b> to get started!\n\n"
+        welcome += "\U0001f381 Start with our packages for unlimited searches!\n\n"
 
-    credits_display = "\u221e Unlimited" if is_admin_user else str(db_user['credits'])
-    welcome += (
-        f"\U0001f4b0 <b>Your Balance:</b> {credits_display} credits\n\n"
-    )
+    if has_access:
+        welcome += "\u2705 <b>Active Subscription</b> \u2014 Unlimited lookups!\n\n"
+    else:
+        welcome += "\u26a0\ufe0f <b>No active subscription</b> \u2014 Buy a package to continue.\n\n"
 
     if is_admin_user:
         welcome += "\U0001f3f7\ufe0f Admin: Send <code>/admin</code> to access panel\n\n"
@@ -146,17 +149,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "1. Tap 'Phone Lookup' button\n"
         "2. Enter the phone number (e.g., 9876543210)\n"
         "3. Get detailed OSINT data instantly!\n\n"
-        "\U0001f4b3 <b>Buy Credits</b>\n"
-        "1. Tap 'Buy Credits' button\n"
+        "\U0001f4b3 <b>Buy Access</b>\n"
+        "1. Tap 'Buy Access' button\n"
         "2. Choose a package\n"
         "3. Send payment to the UPI ID shown\n"
         "4. Upload payment screenshot\n"
-        "5. Credits added instantly!\n\n"
-        "\U0001f4b0 <b>Check Balance</b>\n"
-        "Tap 'My Balance' to see your current credits.\n\n"
+        "5. Get unlimited lookups for the duration!\n\n"
+        "\U0001f4b0 <b>Check Access</b>\n"
+        "Tap 'My Balance' to see your subscription status.\n\n"
         "\U0001f4cb <b>History</b>\n"
         "Tap 'My History' to see your past lookups.\n\n"
-        "\U0001f6e1\ufe0f Each lookup costs <b>1 credit</b>.\n\n"
+        "\U0001f6e1\ufe0f <b>Unlimited lookups</b> while your subscription is active.\n\n"
     )
     if is_admin_user:
         text += "\U0001f3f7\ufe0f <b>Admin:</b> Send <code>/admin</code> to access panel\n\n"
@@ -168,40 +171,63 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user profile."""
     user = update.effective_user
     db_user = db.get_or_create_user(user.id, user.username, user.first_name)
-
+    
+    is_admin_user = user.id in ADMIN_IDS
+    has_access = db.has_active_subscription(user.id)
+    expiry = db.get_subscription_expiry(user.id)
+    
+    
     text = (
         "\U0001f464 <b>Your Profile</b>\n\n"
         f"<b>Name:</b> {db_user['first_name'] or 'N/A'}\n"
         f"<b>Username:</b> @{db_user['username'] or 'N/A'}\n"
         f"<b>User ID:</b> <code>{db_user['user_id']}</code>\n"
-        f"<b>Credits:</b> {db_user['credits']}\n"
         f"<b>Total Lookups:</b> {db_user['total_lookups']}\n"
-        f"<b>Member Since:</b> {db_user['created_at'][:10]}"
+        f"<b>Member Since:</b> {db_user['created_at'][:10]}\n"
     )
+    
+    if is_admin_user:
+        text += "\n\U0001f3f7\ufe0f <b>Access:</b> \u221e Unlimited (Admin)"
+    elif has_access:
+        try:
+            exp_dt = datetime.fromisoformat(expiry)
+            text += f"\n\u2705 <b>Subscription active until:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
+        except:
+            text += "\n\u2705 <b>Subscription active</b>"
+    else:
+        text += "\n\u26a0\ufe0f <b>No active subscription</b>"
+    
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show user balance."""
+    """Show user balance/subscription status."""
     user = update.effective_user
     db.get_or_create_user(user.id, user.username, user.first_name)
-    credits = db.get_credits(user.id)
+    has_access = db.has_active_subscription(user.id)
+    expiry = db.get_subscription_expiry(user.id)
     is_admin_user = user.id in ADMIN_IDS
 
+    text = "\U0001f4b0 <b>Access Status</b>\n\n"
+    
     if is_admin_user:
-        text = "\U0001f4b0 <b>Your Balance</b>\n\n"
-        text += "\U0001f4b5 <b>Available Credits:</b> <b>\u221e Unlimited</b>\n\n"
+        text += "\u2705 <b>Status:</b> \u221e Unlimited (Admin)\n"
         text += "\u2705 Admin account — unlimited lookups."
+    elif has_access:
+        text += "\u2705 <b>Status:</b> <b>Active</b>\n"
+        try:
+            exp_dt = datetime.fromisoformat(expiry)
+            remaining = exp_dt - datetime.now()
+            hours = int(remaining.total_seconds() // 3600)
+            mins = int((remaining.total_seconds() % 3600) // 60)
+            text += f"\U0001f4c5 <b>Expires:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}\n"
+            text += f"\u23f0 <b>Time left:</b> {hours}h {mins}m\n\n"
+            text += "You have <b>unlimited lookups</b> while active."
+        except:
+            text += "You have <b>unlimited lookups</b> while active."
     else:
-        text = "\U0001f4b0 <b>Your Balance</b>\n\n"
-        text += f"\U0001f4b5 <b>Available Credits:</b> <b>{credits}</b>\n\n"
-
-        if credits <= 0:
-            text += "\u26a0\ufe0f You have <b>no credits</b> left!\nBuy more credits to continue."
-        elif credits <= 1:
-            text += "\u26a0\ufe0f Very few credits left. Consider buying more."
-        else:
-            text += f"You can perform <b>{credits}</b> more lookups."
+        text += "\u26a0\ufe0f <b>Status:</b> <b>No Active Subscription</b>\n\n"
+        text += "Buy a package to get unlimited lookups!"
 
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
@@ -219,7 +245,7 @@ async def tx_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             icon = "\u2705" if tx["status"] == "approved" else "\u23f3" if tx["status"] == "pending" else "\u274c"
             text += (
                 f"{icon} <b>{tx['package'].title()}</b> \u2014 "
-                f"+{tx['credits_added']} credits \u2022 \u20b9{tx['amount']}\n"
+                f"\u20b9{tx['amount']} \u2022 Unlimited lookups\n"
                 f"   \U0001f4c5 {tx['created_at'][:16]}\n\n"
             )
 
@@ -227,15 +253,15 @@ async def tx_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show credit packages with QR code."""
+    """Show subscription packages with QR code."""
     import os
     text = (
-        "\U0001f4b3 <b>Buy Credits</b>\n\n"
+        "\U0001f4b3 <b>Buy Access \u2014 Unlimited Lookups</b>\n\n"
         "Choose a package below:\n\n"
         f"\U0001f4b5 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
         f"\U0001f464 <b>Name:</b> {UPI_NAME}\n\n"
-        "\U0001f4b0 Each credit = 1 Phone Lookup\n"
-        "\U0001f510 Send payment, then upload screenshot to confirm."
+        "\U0001f510 <b>Unlimited lookups</b> for the duration!\n"
+        "Send payment, then upload screenshot to confirm."
     )
     # Send QR code image if available
     if os.path.exists(QR_CODE_PATH):
@@ -279,15 +305,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Buy credits package selection
     if data.startswith("buy_"):
         package_key = data.replace("buy_", "")
-        if package_key not in CREDIT_PACKAGES:
+        if package_key not in SUBSCRIPTION_PACKAGES:
             await query.edit_message_text("Invalid package.", reply_markup=back_button())
             return
 
-        pkg = CREDIT_PACKAGES[package_key]
+        pkg = SUBSCRIPTION_PACKAGES[package_key]
         text = (
             f"\U0001f4b3 <b>{pkg['label']}</b>\n\n"
             f"\U0001f4b5 <b>Price:</b> \u20b9{pkg['price']}\n"
-            f"\U0001f4b0 <b>Credits:</b> {pkg['credits']}\n\n"
+            f"\U0001f4b0 <b>Access:</b> Unlimited lookups\n"
+            f"\U0001f4c5 <b>Duration:</b> {pkg['label']}\n\n"
             f"\U0001f4b3 <b>Send payment to:</b>\n"
             f"<code>{UPI_ID}</code>\n"
             f"Name: {UPI_NAME}\n\n"
@@ -298,18 +325,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await query.edit_message_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
         except BadRequest:
-            # Photo messages can't be edited as text - send new message
             await query.message.reply_text(text, reply_markup=confirm_payment_keyboard(package_key), parse_mode="HTML")
         return
 
     # Confirm payment - awaiting screenshot
     if data.startswith("confirm_"):
         package_key = data.replace("confirm_", "")
-        if package_key not in CREDIT_PACKAGES:
+        if package_key not in SUBSCRIPTION_PACKAGES:
             await query.edit_message_text("Invalid package.", reply_markup=back_button())
             return
         context.user_data["awaiting_screenshot"] = package_key
-        pkg = CREDIT_PACKAGES[package_key]
+        pkg = SUBSCRIPTION_PACKAGES[package_key]
         msg_text = (
             f"\U0001f4f8 <b>Send payment screenshot</b>\n\n"
             f"You selected: <b>{pkg['label']}</b> (\u20b9{pkg['price']})\n\n"
@@ -322,7 +348,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await query.edit_message_text(msg_text, parse_mode="HTML")
         except BadRequest:
-            # Photo messages can't be edited as text - send new message
             await query.message.reply_text(msg_text, parse_mode="HTML")
         return
 
@@ -342,7 +367,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # Admin: Approve transaction
+    # Admin: Approve transaction - set subscription
     if data.startswith("approve_"):
         tx_id = int(data.replace("approve_", ""))
         db.update_transaction_status(tx_id, "approved")
@@ -355,28 +380,32 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if row:
             tx = dict(row)
-            db.add_credits(tx["user_id"], tx["credits_added"])
-            try:
-                await context.bot.send_message(
-                    tx["user_id"],
-                    f"\u2705 <b>Payment Approved!</b>\n\n"
-                    f"+{tx['credits_added']} credits added.\n"
-                    f"Balance: {db.get_credits(tx['user_id'])} credits",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
+            # Set subscription based on package
+            if tx["package"] in SUBSCRIPTION_PACKAGES:
+                hours = SUBSCRIPTION_PACKAGES[tx["package"]]["duration_hours"]
+                expiry = db.set_subscription(tx["user_id"], hours)
+                try:
+                    await context.bot.send_message(
+                        tx["user_id"],
+                        f"\u2705 <b>Payment Approved!</b>\n\n"
+                        f"Package: <b>{tx['package'].title()}</b>\n"
+                        f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
+                        f"Valid until: {datetime.fromisoformat(expiry).strftime('%d %b %Y, %I:%M %p')}",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
 
         try:
             await query.edit_message_text(
                 f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
-                f"Credits added: {tx['credits_added'] if row else 'N/A'}",
+                f"Subscription activated for user.",
                 parse_mode="HTML",
             )
         except BadRequest:
             await query.message.reply_text(
                 f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
-                f"Credits added: {tx['credits_added'] if row else 'N/A'}",
+                f"Subscription activated for user.",
                 parse_mode="HTML",
             )
         return
@@ -617,14 +646,13 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check credits (admins skip credit check)
+    # Check subscription (admins skip check)
     if not is_admin_user:
-        credits = db.get_credits(user.id)
-        if credits <= 0:
+        if not db.has_active_subscription(user.id):
             await update.message.reply_text(
-                "\u26a0\ufe0f <b>No Credits!</b>\n\n"
-                "You have no credits left.\n"
-                "Buy more credits to continue using the bot.",
+                "\u26a0\ufe0f <b>No Active Subscription!</b>\n\n"
+                "You need an active subscription to use the bot.\n"
+                "Buy a package for unlimited lookups!",
                 reply_markup=main_menu_keyboard(), parse_mode="HTML",
             )
             return
@@ -713,14 +741,9 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Use one credit (admins skip credit deduction)
+    # Record the lookup (no credit deduction - unlimited access)
     if not is_admin_user:
-        if not db.use_credit(user.id):
-            await loading_msg.edit_text(
-                "\u26a0\ufe0f <b>Credits exhausted</b> during lookup.\nBuy more credits.",
-                parse_mode="HTML",
-            )
-            return
+        db.record_lookup(user.id)
 
     # Record this lookup for rate limiting
     _record_lookup(user.id)
@@ -783,10 +806,9 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # PART 3: Summary header
-    credits_remaining = "\u221e" if is_admin_user else str(db.get_credits(user.id))
     header = (
         f"\U0001f4f1 <b>Lookup Complete for {phone_number}</b>\n"
-        f"Credits remaining: <b>{credits_remaining}</b>"
+        f"\U0001f4b0 <b>Unlimited lookups</b> \u2014 Active subscription"
     )
     await update.message.reply_text(
         header,
@@ -831,14 +853,14 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle payment screenshot upload - auto-approve payments."""
+    """Handle payment screenshot upload - auto-approve and set subscription."""
     user = update.effective_user
     awaiting = context.user_data.get("awaiting_screenshot")
 
-    if not awaiting or awaiting not in CREDIT_PACKAGES:
+    if not awaiting or awaiting not in SUBSCRIPTION_PACKAGES:
         return
 
-    pkg = CREDIT_PACKAGES[awaiting]
+    pkg = SUBSCRIPTION_PACKAGES[awaiting]
     screenshot_file_id = None
 
     if update.message.photo:
@@ -853,19 +875,26 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Create transaction and auto-approve
-    tx_id = db.create_transaction(user.id, awaiting, pkg["credits"], pkg["price"], screenshot_file_id)
+    tx_id = db.create_transaction(user.id, awaiting, pkg["duration_hours"], pkg["price"], screenshot_file_id)
     db.update_transaction_status(tx_id, "approved")
-    db.add_credits(user.id, pkg["credits"])
+    # Set subscription (extends from current expiry if exists)
+    expiry = db.set_subscription(user.id, pkg["duration_hours"])
 
     context.user_data.pop("awaiting_screenshot", None)
     context.user_data.pop("pending_package", None)
+
+    try:
+        exp_dt = datetime.fromisoformat(expiry)
+        expiry_display = exp_dt.strftime('%d %b %Y, %I:%M %p')
+    except:
+        expiry_display = "Active"
 
     await update.message.reply_text(
         f"\u2705 <b>Payment Approved!</b>\n\n"
         f"Package: <b>{pkg['label']}</b>\n"
         f"Amount: \u20b9{pkg['price']}\n"
-        f"+{pkg['credits']} credits added\n"
-        f"Balance: <b>{db.get_credits(user.id)}</b> credits\n\n"
+        f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
+        f"\U0001f4c5 Valid until: {expiry_display}\n\n"
         "You can now use the bot!",
         reply_markup=main_menu_keyboard(),
         parse_mode="HTML",
@@ -881,7 +910,7 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
                 f"User ID: <code>{user.id}</code>\n"
                 f"Package: <b>{pkg['label']}</b>\n"
-                f"+{pkg['credits']} credits",
+                f"Unlimited lookups activated until {expiry_display}",
                 parse_mode="HTML",
             )
         except Exception:
