@@ -10,7 +10,7 @@ MAX_RETRIES = 3
 RETRY_DELAY = 3  # seconds
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.google.com/",
@@ -18,14 +18,15 @@ HEADERS = {
 }
 
 
-def _fetch_requests(url: str, params: dict) -> dict:
-    """Fetch data using requests library."""
+def _fetch_cffi(url: str, params: dict) -> dict:
+    """Fetch data using curl_cffi (bypasses TLS fingerprinting)."""
     try:
-        import requests
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        from curl_cffi import requests as cffi_requests
+        resp = cffi_requests.get(
+            url, params=params, headers=HEADERS, impersonate="chrome", timeout=30
+        )
         if resp.status_code == 200:
             data = resp.json()
-            # Check if the API returned actual data (not just an error wrapper)
             if data.get("results") or data.get("chain") or data.get("calltracer"):
                 return {"success": True, "data": data}
             elif data.get("success") is False or data.get("error"):
@@ -40,24 +41,23 @@ def _fetch_requests(url: str, params: dict) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def _fetch_httpx_sync(url: str, params: dict) -> dict:
-    """Fetch data using httpx library."""
+def _fetch_requests(url: str, params: dict) -> dict:
+    """Fetch data using requests library."""
     try:
-        import httpx
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(url, params=params, headers=HEADERS)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("results") or data.get("chain") or data.get("calltracer"):
-                    return {"success": True, "data": data}
-                elif data.get("success") is False or data.get("error"):
-                    return {"success": False, "error": data.get("error", "API returned error")}
-                else:
-                    return {"success": False, "error": "API returned empty data"}
-            elif resp.status_code == 403:
-                return {"success": False, "error": "API blocked (403 Forbidden)"}
+        import requests
+        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("results") or data.get("chain") or data.get("calltracer"):
+                return {"success": True, "data": data}
+            elif data.get("success") is False or data.get("error"):
+                return {"success": False, "error": data.get("error", "API returned error")}
             else:
-                return {"success": False, "error": f"HTTP {resp.status_code}"}
+                return {"success": False, "error": "API returned empty data"}
+        elif resp.status_code == 403:
+            return {"success": False, "error": "API blocked (403 Forbidden)"}
+        else:
+            return {"success": False, "error": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -92,22 +92,22 @@ async def _fetch_curl(url: str, params: dict) -> dict:
 
 
 async def _fetch_with_fallback(url: str, params: dict) -> dict:
-    """Try multiple methods to fetch data."""
-    # Method 1: Try requests
+    """Try multiple methods to fetch data. curl_cffi first (bypasses TLS)."""
+    # Method 1: curl_cffi (best - bypasses TLS fingerprinting)
+    result = await asyncio.to_thread(_fetch_cffi, url, params)
+    if result["success"]:
+        logger.info("API call succeeded via curl_cffi")
+        return result
+    logger.warning(f"curl_cffi failed: {result.get('error')}")
+
+    # Method 2: Try requests
     result = await asyncio.to_thread(_fetch_requests, url, params)
     if result["success"]:
         logger.info("API call succeeded via requests")
         return result
     logger.warning(f"requests failed: {result.get('error')}")
 
-    # Method 2: Try httpx
-    result = await asyncio.to_thread(_fetch_httpx_sync, url, params)
-    if result["success"]:
-        logger.info("API call succeeded via httpx")
-        return result
-    logger.warning(f"httpx failed: {result.get('error')}")
-
-    # Method 3: Try curl
+    # Method 3: Try curl subprocess
     result = await _fetch_curl(url, params)
     if result["success"]:
         logger.info("API call succeeded via curl")

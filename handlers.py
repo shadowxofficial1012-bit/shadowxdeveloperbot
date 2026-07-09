@@ -635,22 +635,43 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Check if at least one API succeeded
+    logger.info(f"Number API: success={result_num['success']}, error={result_num.get('error')}")
+    logger.info(f"Numleak API: success={result_leak['success']}, error={result_leak.get('error')}")
+
     if not result_num["success"] and not result_leak["success"]:
+        err_num = result_num.get('error', 'Unknown')
+        err_leak = result_leak.get('error', 'Unknown')
         await loading_msg.edit_text(
-            f"\u274c <b>Lookup Failed</b>\n\nError: {result_num.get('error', 'Unknown error')}\n\nPlease try again later.",
+            f"\u274c <b>Lookup Failed</b>\n\n"
+            f"Number API: {err_num}\n"
+            f"Numleak API: {err_leak}\n\n"
+            "Please try again later or contact @HATHI02.",
             parse_mode="HTML",
         )
         return
 
     # Check if we got any data (numleak has chain OR calltracer)
-    has_num_data = result_num["success"] and result_num.get("data", {}).get("results")
+    num_data = result_num.get("data", {}) if result_num["success"] else {}
     numleak_data_raw = result_leak.get("data", {}) if result_leak["success"] else {}
+    has_num_data = bool(num_data.get("results"))
     has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
 
+    logger.info(f"Data check: has_num_data={has_num_data}, has_leak_data={has_leak_data}")
+    logger.info(f"num_data keys={list(num_data.keys()) if num_data else 'empty'}")
+    logger.info(f"numleak_data keys={list(numleak_data_raw.keys()) if numleak_data_raw else 'empty'}")
+
     if not has_num_data and not has_leak_data:
+        # Show what we actually got for debugging
+        details = []
+        if result_num["success"] and num_data:
+            details.append(f"Number API: got response with keys {list(num_data.keys())}")
+        if result_leak["success"] and numleak_data_raw:
+            details.append(f"Numleak API: got response with keys {list(numleak_data_raw.keys())}")
+        detail_str = "\n".join(details) if details else "APIs returned empty data."
         await loading_msg.edit_text(
             f"\u274c <b>No data found</b> for <code>{phone_number}</code>.\n\n"
-            "The number may not exist in the database or the API is unavailable.",
+            f"{detail_str}\n\n"
+            "The number may not exist in the database or the API is rate limited.",
             parse_mode="HTML",
         )
         return
