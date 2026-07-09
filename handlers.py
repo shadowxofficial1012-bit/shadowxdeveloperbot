@@ -20,6 +20,7 @@ from keyboards import (
     export_keyboard,
     history_list_keyboard,
     reexport_keyboard,
+    admin_keyboard,
 )
 from datetime import datetime
 from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
@@ -299,6 +300,132 @@ async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=buy_credits_keyboard(), parse_mode="HTML")
 
 
+# --- Admin Payment Approve/Reject Helpers ---
+
+async def _approve_transaction(tx_id: int, context, query=None):
+    """Approve a transaction: update status, activate subscription, notify user."""
+    db.update_transaction_status(tx_id, "approved")
+
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row:
+        tx = dict(row)
+        if tx["package"] in SUBSCRIPTION_PACKAGES:
+            hours = SUBSCRIPTION_PACKAGES[tx["package"]]["duration_hours"]
+            expiry = db.set_subscription(tx["user_id"], hours)
+            try:
+                await context.bot.send_message(
+                    tx["user_id"],
+                    f"\u2705 <b>Payment Approved!</b>\n\n"
+                    f"Package: <b>{tx['package'].title()}</b>\n"
+                    f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
+                    f"Valid until: {datetime.fromisoformat(expiry).strftime('%d %b %Y, %I:%M %p')}",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+    result = f"\u2705 <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user."
+    if query:
+        try:
+            await query.edit_message_text(result, parse_mode="HTML")
+        except BadRequest:
+            await query.message.reply_text(result, parse_mode="HTML")
+    return result
+
+
+async def _reject_transaction(tx_id: int, context, query=None):
+    """Reject a transaction: update status, notify user."""
+    db.update_transaction_status(tx_id, "rejected")
+
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row:
+        tx = dict(row)
+        try:
+            await context.bot.send_message(
+                tx["user_id"],
+                f"\u274c <b>Payment Rejected</b>\n\n"
+                f"Package: {tx['package'].title()}\n"
+                "Contact admin for support.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    result = f"\u274c <b>Transaction #{tx_id} Rejected</b>"
+    if query:
+        try:
+            await query.edit_message_text(result, parse_mode="HTML")
+        except BadRequest:
+            await query.message.reply_text(result, parse_mode="HTML")
+    return result
+
+
+async def handle_approve_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /approve <tx_id> command."""
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("\U0001f6ab <b>Access Denied.</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "\u274c Usage: <code>/approve &lt;tx_id&gt;</code>\nExample: <code>/approve 5</code>",
+            parse_mode="HTML",
+        )
+        return
+    try:
+        tx_id = int(args[0])
+    except (ValueError, IndexError):
+        await update.message.reply_text(
+            "\u274c Invalid transaction ID. Example: <code>/approve 5</code>",
+            parse_mode="HTML",
+        )
+        return
+    await _approve_transaction(tx_id, context)
+    await update.message.reply_text(
+        f"\u2705 <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user.",
+        reply_markup=admin_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+async def handle_reject_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /reject <tx_id> command."""
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("\U0001f6ab <b>Access Denied.</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "\u274c Usage: <code>/reject &lt;tx_id&gt;</code>\nExample: <code>/reject 5</code>",
+            parse_mode="HTML",
+        )
+        return
+    try:
+        tx_id = int(args[0])
+    except (ValueError, IndexError):
+        await update.message.reply_text(
+            "\u274c Invalid transaction ID. Example: <code>/reject 5</code>",
+            parse_mode="HTML",
+        )
+        return
+    await _reject_transaction(tx_id, context)
+    await update.message.reply_text(
+        f"\u274c <b>Transaction #{tx_id} Rejected</b>",
+        reply_markup=admin_keyboard(),
+        parse_mode="HTML",
+    )
+
+
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all inline button callbacks."""
     query = update.callback_query
@@ -439,74 +566,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Admin: Approve transaction - set subscription
     if data.startswith("approve_"):
         tx_id = int(data.replace("approve_", ""))
-        db.update_transaction_status(tx_id, "approved")
-
-        conn = db.get_db()
-        c = conn.cursor()
-        c.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,))
-        row = c.fetchone()
-        conn.close()
-
-        if row:
-            tx = dict(row)
-            # Set subscription based on package
-            if tx["package"] in SUBSCRIPTION_PACKAGES:
-                hours = SUBSCRIPTION_PACKAGES[tx["package"]]["duration_hours"]
-                expiry = db.set_subscription(tx["user_id"], hours)
-                try:
-                    await context.bot.send_message(
-                        tx["user_id"],
-                        f"\u2705 <b>Payment Approved!</b>\n\n"
-                        f"Package: <b>{tx['package'].title()}</b>\n"
-                        f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
-                        f"Valid until: {datetime.fromisoformat(expiry).strftime('%d %b %Y, %I:%M %p')}",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
-
-        try:
-            await query.edit_message_text(
-                f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
-                f"Subscription activated for user.",
-                parse_mode="HTML",
-            )
-        except BadRequest:
-            await query.message.reply_text(
-                f"\u2705 <b>Transaction #{tx_id} Approved</b>\n"
-                f"Subscription activated for user.",
-                parse_mode="HTML",
-            )
+        await _approve_transaction(tx_id, context, query)
         return
 
     # Admin: Reject transaction
     if data.startswith("reject_"):
         tx_id = int(data.replace("reject_", ""))
-        db.update_transaction_status(tx_id, "rejected")
-
-        conn = db.get_db()
-        c = conn.cursor()
-        c.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,))
-        row = c.fetchone()
-        conn.close()
-
-        if row:
-            tx = dict(row)
-            try:
-                await context.bot.send_message(
-                    tx["user_id"],
-                    f"\u274c <b>Payment Rejected</b>\n\n"
-                    f"Package: {tx['package'].title()}\n"
-                    "Contact admin for support.",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        try:
-            await query.edit_message_text(f"\u274c <b>Transaction #{tx_id} Rejected</b>", parse_mode="HTML")
-        except BadRequest:
-            await query.message.reply_text(f"\u274c <b>Transaction #{tx_id} Rejected</b>", parse_mode="HTML")
+        await _reject_transaction(tx_id, context, query)
         return
 
     # Admin: Confirm ban

@@ -22,6 +22,8 @@ from handlers import (
     handle_lookup,
     handle_screenshot,
     demo_result,
+    handle_approve_command,
+    handle_reject_command,
 )
 from admin import (
     admin_start,
@@ -183,6 +185,8 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("admin", admin_start))
     app.add_handler(CommandHandler("demo", demo_result))
+    app.add_handler(CommandHandler("approve", handle_approve_command))
+    app.add_handler(CommandHandler("reject", handle_reject_command))
 
     # Callback handler (inline buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))
