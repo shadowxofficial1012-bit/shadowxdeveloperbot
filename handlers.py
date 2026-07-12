@@ -14,22 +14,23 @@ import database as db
 import api_client
 from keyboards import (
     main_menu_keyboard,
-    buy_credits_keyboard,
+    buy_plan_keyboard,
     confirm_payment_keyboard,
     back_button,
     export_keyboard,
     history_list_keyboard,
     reexport_keyboard,
     admin_keyboard,
+    required_channels_keyboard,
+    main_menu_button,
 )
 from datetime import datetime
-from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS
+from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS, REQUIRED_CHANNELS
 
 
 def generate_upi_qr(amount: int, note: str = "") -> io.BytesIO:
     """Generate a QR code image with UPI deep link for exact amount."""
     import qrcode
-    # UPI deep link format: upi://pay?pa=<UPI_ID>&pn=<UPI_NAME>&am=<AMOUNT>&tn=<NOTE>&cu=INR
     upi_link = (
         f"upi://pay?pa={UPI_ID}"
         f"&pn={quote(UPI_NAME)}"
@@ -45,31 +46,62 @@ def generate_upi_qr(amount: int, note: str = "") -> io.BytesIO:
 
 logger = logging.getLogger(__name__)
 
+# --- Channel Membership Check ---
+async def check_user_channels(user_id: int, bot) -> tuple[bool, list[str]]:
+    """
+    Check if user has joined all required channels/groups.
+    Returns (is_member, list of channel names user needs to join).
+    """
+    not_joined = []
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status in ["creator", "administrator", "member"]:
+                continue
+            else:
+                not_joined.append(channel)
+        except BadRequest as e:
+            logger.warning(f"Failed to check membership for {channel}: {e}")
+            not_joined.append(channel)
+        except Exception as e:
+            logger.error(f"Unexpected error checking {channel}: {e}")
+            not_joined.append(channel)
+    return (len(not_joined) == 0, not_joined)
+
+
+async def show_join_required(chat_id, bot, parse_mode="HTML"):
+    """Show the channel join required message."""
+    channels_text = "\n".join([f"• {ch}" for ch in REQUIRED_CHANNELS])
+    text = (
+        "🔴 <b>Join Required Channels!</b>\n\n"
+        "You must join the following channels before using this bot:\n\n"
+        f"{channels_text}\n\n"
+        "After joining, tap the button below to verify."
+    )
+    await bot.send_message(
+        chat_id,
+        text,
+        reply_markup=required_channels_keyboard(),
+        parse_mode=parse_mode,
+    )
+
+
 # Max Telegram message length
 MAX_MSG_LEN = 4096
 MAX_CAPTION_LEN = 1024
 
 # --- Rate Limiting ---
-# Max lookups per user within the sliding window
 RATE_LIMIT_MAX = 5
-# Sliding window duration in seconds (1 minute)
 RATE_LIMIT_WINDOW = 60
-# Stores {user_id: [timestamp, timestamp, ...]}
 _rate_limit_tracker: dict[int, list[float]] = defaultdict(list)
 
 
 def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """
-    Check if a user is within the rate limit.
-    Returns (is_allowed, seconds_until_next_slot).
-    """
     now = time.time()
-    # Remove timestamps older than the window
     _rate_limit_tracker[user_id] = [
         ts for ts in _rate_limit_tracker[user_id] if now - ts < RATE_LIMIT_WINDOW
     ]
     if len(_rate_limit_tracker[user_id]) >= RATE_LIMIT_MAX:
-        # Oldest timestamp in the window determines when a slot frees up
         oldest = _rate_limit_tracker[user_id][0]
         wait = int(RATE_LIMIT_WINDOW - (now - oldest)) + 1
         return False, wait
@@ -77,26 +109,22 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 
 
 def _record_lookup(user_id: int):
-    """Record a lookup timestamp for rate limiting."""
     _rate_limit_tracker[user_id].append(time.time())
 
 
 def safe_str(val, default="N/A") -> str:
-    """Safely convert a value to string, returning default if None/empty."""
     if val is None or val == "":
         return default
     return str(val)
 
 
 def escape_html(text: str) -> str:
-    """Escape HTML special characters for safe Telegram rendering."""
     if not text:
         return ""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def format_number(n):
-    """Format a number with commas."""
     if n is None:
         return "0"
     try:
@@ -105,15 +133,30 @@ def format_number(n):
         return str(n)
 
 
-
-
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command with branded header image."""
     user = update.effective_user
     db_user = db.get_or_create_user(user.id, user.username, user.first_name)
 
     is_new = db_user["total_lookups"] == 0
+
+    # Enforce channel join for non-admins
+    if user.id not in ADMIN_IDS:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels before using this bot:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
 
     # Try to send branded header image
     try:
@@ -137,23 +180,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_access = is_admin_user or db.has_active_subscription(user.id)
     
     welcome = (
-        f"\U0001f44b Welcome, <b>{user.first_name}</b>!\n\n"
-        f"\U0001f50d <b>Phone OSINT by @HATHI02</b>\n"
+        f"👋 Welcome, <b>{user.first_name}</b>!\n\n"
+        f"🔍 <b>Phone OSINT by @HATHI02</b>\n"
         "Get detailed information about any phone number.\n\n"
     )
 
     if is_new:
-        welcome += "\U0001f381 Start with our packages for unlimited searches!\n\n"
+        welcome += "🎁 Start with our packages for unlimited searches!\n\n"
 
     if has_access:
-        welcome += "\u2705 <b>Active Subscription</b> \u2014 Unlimited lookups!\n\n"
+        welcome += "✅ <b>Active Subscription</b> — Unlimited lookups!\n\n"
     else:
-        welcome += "\u26a0\ufe0f <b>No active subscription</b> \u2014 Buy a package to continue.\n\n"
+        welcome += "⚠️ <b>No active subscription</b> — Buy a package to continue.\n\n"
 
     if is_admin_user:
-        welcome += "\U0001f3f7\ufe0f Admin: Send <code>/admin</code> to access panel\n\n"
+        welcome += "🏷 Admin: Tap <b>🔧 Admin Panel</b> below\n\n"
 
-    welcome += "Choose an option below \u2193"
+    welcome += "Choose an option below 👇"
 
     await update.message.reply_text(
         welcome,
@@ -163,30 +206,74 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command."""
-    is_admin_user = update.effective_user.id in ADMIN_IDS
+    """Handle /help and ❓ Help Guide button."""
     text = (
-        "\U0001f4d6 <b>Phone OSINT Bot by @HATHI02</b>\n\n"
-        "\U0001f50d <b>Phone Lookup</b>\n"
-        "1. Tap 'Phone Lookup' button\n"
-        "2. Enter the phone number (e.g., 9876543210)\n"
-        "3. Get detailed OSINT data instantly!\n\n"
-        "\U0001f4b3 <b>Buy Access</b>\n"
-        "1. Tap 'Buy Access' button\n"
-        "2. Choose a package\n"
-        "3. Send payment to the UPI ID shown\n"
-        "4. Upload payment screenshot\n"
-        "5. Get unlimited lookups for the duration!\n\n"
-        "\U0001f4b0 <b>Check Access</b>\n"
-        "Tap 'My Balance' to see your subscription status.\n\n"
-        "\U0001f4cb <b>History</b>\n"
-        "Tap 'My History' to see your past lookups.\n\n"
-        "\U0001f6e1\ufe0f <b>Unlimited lookups</b> while your subscription is active.\n\n"
+        "📖 <b>Phone OSINT Bot by @HATHI02</b>\n\n"
+        "🔍 <b>How to Use</b>\n"
+        "1. Tap '💰 Buy Plan' to purchase access\n"
+        "2. Or tap '🎁 Redeem Code' if you have a code\n"
+        "3. Send a phone number (e.g., 9876543210)\n"
+        "4. Get detailed OSINT data instantly!\n\n"
+        "💡 <b>What You Get</b>\n"
+        "• Full name & address\n"
+        "• Alternative numbers\n"
+        "• SIM card details\n"
+        "• Location & carrier info\n"
+        "• PDF report export\n\n"
+        "💳 <b>Payment</b>\n"
+        "Pay via UPI, upload screenshot, and get instant access.\n\n"
+        "🛡 <b>Unlimited lookups</b> while your subscription is active.\n\n"
+        "For support, contact @HATHI02."
     )
-    if is_admin_user:
-        text += "\U0001f3f7\ufe0f <b>Admin:</b> Send <code>/admin</code> to access panel\n\n"
-    text += "For support, contact @HATHI02."
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+
+
+async def contact_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 🤳 Contact Admin button."""
+    text = (
+        "🤳 <b>Contact Admin</b>\n\n"
+        "For support, payments, or any queries:\n\n"
+        "📩 <b>Telegram:</b> @HATHI02\n\n"
+        "Tap the link below to message us directly 👇"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📩 Message @HATHI02", url="https://t.me/HATHI02")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_main")]
+    ])
+    await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+async def handle_redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 🎁 Redeem Code button - ask user to enter their code."""
+    text = (
+        "🎁 <b>Redeem Code</b>\n\n"
+        "Enter your redeem code below:\n\n"
+        "Example: <code>ABC123XYZ9</code>"
+    )
+    await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    context.user_data["awaiting_redeem_code"] = True
+
+
+async def process_redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Process a redeem code entered by user."""
+    code = update.message.text.strip()
+    user = update.effective_user
+    
+    success, message, hours = db.redeem_code(code, user.id)
+    
+    if success:
+        await update.message.reply_text(
+            f"{message}\n\n🎉 Enjoy unlimited lookups!",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+    else:
+        await update.message.reply_text(
+            f"{message}\n\nPlease try again or contact admin.",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
 
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -198,9 +285,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_access = db.has_active_subscription(user.id)
     expiry = db.get_subscription_expiry(user.id)
     
-    
     text = (
-        "\U0001f464 <b>Your Profile</b>\n\n"
+        "👤 <b>Your Profile</b>\n\n"
         f"<b>Name:</b> {db_user['first_name'] or 'N/A'}\n"
         f"<b>Username:</b> @{db_user['username'] or 'N/A'}\n"
         f"<b>User ID:</b> <code>{db_user['user_id']}</code>\n"
@@ -209,15 +295,15 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     if is_admin_user:
-        text += "\n\U0001f3f7\ufe0f <b>Access:</b> \u221e Unlimited (Admin)"
+        text += "\n🏷 <b>Access:</b> ∞ Unlimited (Admin)"
     elif has_access:
         try:
             exp_dt = datetime.fromisoformat(expiry)
-            text += f"\n\u2705 <b>Subscription active until:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
+            text += f"\n✅ <b>Subscription active until:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
         except:
-            text += "\n\u2705 <b>Subscription active</b>"
+            text += "\n✅ <b>Subscription active</b>"
     else:
-        text += "\n\u26a0\ufe0f <b>No active subscription</b>"
+        text += "\n⚠️ <b>No active subscription</b>"
     
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
@@ -230,25 +316,25 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     expiry = db.get_subscription_expiry(user.id)
     is_admin_user = user.id in ADMIN_IDS
 
-    text = "\U0001f4b0 <b>Access Status</b>\n\n"
+    text = "💰 <b>Access Status</b>\n\n"
     
     if is_admin_user:
-        text += "\u2705 <b>Status:</b> \u221e Unlimited (Admin)\n"
-        text += "\u2705 Admin account — unlimited lookups."
+        text += "✅ <b>Status:</b> ∞ Unlimited (Admin)\n"
+        text += "✅ Admin account — unlimited lookups."
     elif has_access:
-        text += "\u2705 <b>Status:</b> <b>Active</b>\n"
+        text += "✅ <b>Status:</b> <b>Active</b>\n"
         try:
             exp_dt = datetime.fromisoformat(expiry)
             remaining = exp_dt - datetime.now()
             hours = int(remaining.total_seconds() // 3600)
             mins = int((remaining.total_seconds() % 3600) // 60)
-            text += f"\U0001f4c5 <b>Expires:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}\n"
-            text += f"\u23f0 <b>Time left:</b> {hours}h {mins}m\n\n"
+            text += f"📅 <b>Expires:</b> {exp_dt.strftime('%d %b %Y, %I:%M %p')}\n"
+            text += f"⏰ <b>Time left:</b> {hours}h {mins}m\n\n"
             text += "You have <b>unlimited lookups</b> while active."
         except:
             text += "You have <b>unlimited lookups</b> while active."
     else:
-        text += "\u26a0\ufe0f <b>Status:</b> <b>No Active Subscription</b>\n\n"
+        text += "⚠️ <b>Status:</b> <b>No Active Subscription</b>\n\n"
         text += "Buy a package to get unlimited lookups!"
 
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
@@ -260,28 +346,28 @@ async def tx_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txs = db.get_user_transactions(user.id, limit=10)
 
     if not txs:
-        text = "\U0001f4cb <b>Transaction History</b>\n\nNo transactions yet."
+        text = "📋 <b>Transaction History</b>\n\nNo transactions yet."
     else:
-        text = "\U0001f4cb <b>Transaction History</b>\n\n"
+        text = "📋 <b>Transaction History</b>\n\n"
         for tx in txs:
-            icon = "\u2705" if tx["status"] == "approved" else "\u23f3" if tx["status"] == "pending" else "\u274c"
+            icon = "✅" if tx["status"] == "approved" else "⏳" if tx["status"] == "pending" else "❌"
             text += (
-                f"{icon} <b>{tx['package'].title()}</b> \u2014 "
-                f"\u20b9{tx['amount']} \u2022 Unlimited lookups\n"
-                f"   \U0001f4c5 {tx['created_at'][:16]}\n\n"
+                f"{icon} <b>{tx['package'].title()}</b> — "
+                f"₹{tx['amount']} • Unlimited lookups\n"
+                f"   📅 {tx['created_at'][:16]}\n\n"
             )
 
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
-async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show subscription packages with QR code."""
     text = (
-        "\U0001f4b3 <b>Buy Access \u2014 Unlimited Lookups</b>\n\n"
+        "💰 <b>Buy Plan — Unlimited Lookups</b>\n\n"
         "Choose a package below:\n\n"
-        f"\U0001f4b5 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
-        f"\U0001f464 <b>Name:</b> {UPI_NAME}\n\n"
-        "\U0001f510 <b>Unlimited lookups</b> for the duration!\n"
+        f"💵 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
+        f"👤 <b>Name:</b> {UPI_NAME}\n\n"
+        "🔐 <b>Unlimited lookups</b> for the duration!\n"
         "Send payment, then upload screenshot to confirm."
     )
     # Send QR code image if available
@@ -290,14 +376,14 @@ async def buy_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_photo(
                 photo=QR_CODE_PATH,
                 caption=text,
-                reply_markup=buy_credits_keyboard(),
+                reply_markup=buy_plan_keyboard(),
                 parse_mode="HTML",
             )
             return
         except Exception as e:
             logger.error(f"Failed to send QR code: {e}")
     # Fallback: text only
-    await update.message.reply_text(text, reply_markup=buy_credits_keyboard(), parse_mode="HTML")
+    await update.message.reply_text(text, reply_markup=buy_plan_keyboard(), parse_mode="HTML")
 
 
 # --- Admin Payment Approve/Reject Helpers ---
@@ -320,16 +406,16 @@ async def _approve_transaction(tx_id: int, context, query=None):
             try:
                 await context.bot.send_message(
                     tx["user_id"],
-                    f"\u2705 <b>Payment Approved!</b>\n\n"
+                    f"✅ <b>Payment Approved!</b>\n\n"
                     f"Package: <b>{tx['package'].title()}</b>\n"
-                    f"\U0001f4b0 <b>Unlimited lookups activated!</b>\n"
+                    f"💰 <b>Unlimited lookups activated!</b>\n"
                     f"Valid until: {datetime.fromisoformat(expiry).strftime('%d %b %Y, %I:%M %p')}",
                     parse_mode="HTML",
                 )
             except Exception:
                 pass
 
-    result = f"\u2705 <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user."
+    result = f"✅ <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user."
     if query:
         try:
             await query.edit_message_text(result, parse_mode="HTML")
@@ -353,7 +439,7 @@ async def _reject_transaction(tx_id: int, context, query=None):
         try:
             await context.bot.send_message(
                 tx["user_id"],
-                f"\u274c <b>Payment Rejected</b>\n\n"
+                f"❌ <b>Payment Rejected</b>\n\n"
                 f"Package: {tx['package'].title()}\n"
                 "Contact admin for support.",
                 parse_mode="HTML",
@@ -361,7 +447,7 @@ async def _reject_transaction(tx_id: int, context, query=None):
         except Exception:
             pass
 
-    result = f"\u274c <b>Transaction #{tx_id} Rejected</b>"
+    result = f"❌ <b>Transaction #{tx_id} Rejected</b>"
     if query:
         try:
             await query.edit_message_text(result, parse_mode="HTML")
@@ -373,12 +459,12 @@ async def _reject_transaction(tx_id: int, context, query=None):
 async def handle_approve_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /approve <tx_id> command."""
     if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("\U0001f6ab <b>Access Denied.</b>", parse_mode="HTML")
+        await update.message.reply_text("🚫 <b>Access Denied.</b>", parse_mode="HTML")
         return
     args = context.args
     if not args:
         await update.message.reply_text(
-            "\u274c Usage: <code>/approve &lt;tx_id&gt;</code>\nExample: <code>/approve 5</code>",
+            "❌ Usage: <code>/approve &lt;tx_id&gt;</code>\nExample: <code>/approve 5</code>",
             parse_mode="HTML",
         )
         return
@@ -386,13 +472,13 @@ async def handle_approve_command(update: Update, context: ContextTypes.DEFAULT_T
         tx_id = int(args[0])
     except (ValueError, IndexError):
         await update.message.reply_text(
-            "\u274c Invalid transaction ID. Example: <code>/approve 5</code>",
+            "❌ Invalid transaction ID. Example: <code>/approve 5</code>",
             parse_mode="HTML",
         )
         return
     await _approve_transaction(tx_id, context)
     await update.message.reply_text(
-        f"\u2705 <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user.",
+        f"✅ <b>Transaction #{tx_id} Approved</b>\nSubscription activated for user.",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
@@ -401,12 +487,12 @@ async def handle_approve_command(update: Update, context: ContextTypes.DEFAULT_T
 async def handle_reject_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /reject <tx_id> command."""
     if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("\U0001f6ab <b>Access Denied.</b>", parse_mode="HTML")
+        await update.message.reply_text("🚫 <b>Access Denied.</b>", parse_mode="HTML")
         return
     args = context.args
     if not args:
         await update.message.reply_text(
-            "\u274c Usage: <code>/reject &lt;tx_id&gt;</code>\nExample: <code>/reject 5</code>",
+            "❌ Usage: <code>/reject &lt;tx_id&gt;</code>\nExample: <code>/reject 5</code>",
             parse_mode="HTML",
         )
         return
@@ -414,13 +500,13 @@ async def handle_reject_command(update: Update, context: ContextTypes.DEFAULT_TY
         tx_id = int(args[0])
     except (ValueError, IndexError):
         await update.message.reply_text(
-            "\u274c Invalid transaction ID. Example: <code>/reject 5</code>",
+            "❌ Invalid transaction ID. Example: <code>/reject 5</code>",
             parse_mode="HTML",
         )
         return
     await _reject_transaction(tx_id, context)
     await update.message.reply_text(
-        f"\u274c <b>Transaction #{tx_id} Rejected</b>",
+        f"❌ <b>Transaction #{tx_id} Rejected</b>",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
@@ -434,6 +520,50 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = query.from_user
 
+    # Verify channels membership - this is always allowed
+    if data == "verify_channels":
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if is_member:
+            text = (
+                "✅ <b>Verification Successful!</b>\n\n"
+                "You have joined all required channels.\n"
+                "You can now use the bot."
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=main_menu_button(), parse_mode="HTML")
+            except BadRequest:
+                await query.message.reply_text(text, reply_markup=main_menu_button(), parse_mode="HTML")
+        else:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Not Yet Verified!</b>\n\n"
+                "You still need to join:\n"
+                f"{channel_list}\n\n"
+                "Join then tap verify again."
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=required_channels_keyboard(), parse_mode="HTML")
+            except BadRequest:
+                await query.message.reply_text(text, reply_markup=required_channels_keyboard(), parse_mode="HTML")
+        return
+
+    # Channel check for ALL other callbacks (non-admins only)
+    if user.id not in ADMIN_IDS:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap verify below."
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=required_channels_keyboard(), parse_mode="HTML")
+            except BadRequest:
+                await query.message.reply_text(text, reply_markup=required_channels_keyboard(), parse_mode="HTML")
+            return
+
     # Back to main menu
     if data == "back_main":
         is_admin_user = user.id in ADMIN_IDS
@@ -441,7 +571,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expiry = db.get_subscription_expiry(user.id)
         
         if is_admin_user:
-            status_text = "\u221e Unlimited (Admin)"
+            status_text = "∞ Unlimited (Admin)"
         elif has_access:
             try:
                 exp_dt = datetime.fromisoformat(expiry)
@@ -452,30 +582,30 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status_text = "No active subscription"
         
         text = (
-            f"\U0001f44b Hey, <b>{user.first_name}</b>!\n\n"
-            f"\U0001f4b0 <b>Status:</b> {status_text}\n\n"
-            "Choose an option \u2193"
+            f"👋 Hey, <b>{user.first_name}</b>!\n\n"
+            f"💰 <b>Status:</b> {status_text}\n\n"
+            "Choose an option 👇"
         )
         try:
-            await query.edit_message_text(text, reply_markup=back_button(), parse_mode="HTML")
+            await query.edit_message_text(text, reply_markup=main_menu_button(), parse_mode="HTML")
         except BadRequest:
-            await query.message.reply_text(text, reply_markup=back_button(), parse_mode="HTML")
+            await query.message.reply_text(text, reply_markup=main_menu_button(), parse_mode="HTML")
         return
 
-    # Buy credits package selection
+    # Buy plan package selection
     if data.startswith("buy_"):
         package_key = data.replace("buy_", "")
         if package_key not in SUBSCRIPTION_PACKAGES:
-            await query.edit_message_text("Invalid package.", reply_markup=back_button())
+            await query.edit_message_text("Invalid package.", reply_markup=main_menu_button())
             return
 
         pkg = SUBSCRIPTION_PACKAGES[package_key]
         text = (
-            f"\U0001f4b3 <b>{pkg['label']}</b>\n\n"
-            f"\U0001f4b5 <b>Price:</b> \u20b9{pkg['price']}\n"
-            f"\U0001f4b0 <b>Access:</b> Unlimited lookups\n"
-            f"\U0001f4c5 <b>Duration:</b> {pkg['label']}\n\n"
-            f"\U0001f4b3 <b>Send payment to:</b>\n"
+            f"💰 <b>{pkg['label']}</b>\n\n"
+            f"💵 <b>Price:</b> ₹{pkg['price']}\n"
+            f"💰 <b>Access:</b> Unlimited lookups\n"
+            f"📅 <b>Duration:</b> {pkg['label']}\n\n"
+            f"💳 <b>Send payment to:</b>\n"
             f"<code>{UPI_ID}</code>\n"
             f"Name: {UPI_NAME}\n\n"
             "After payment, send a screenshot of the payment confirmation.\n"
@@ -492,7 +622,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("confirm_"):
         package_key = data.replace("confirm_", "")
         if package_key not in SUBSCRIPTION_PACKAGES:
-            await query.edit_message_text("Invalid package.", reply_markup=back_button())
+            await query.edit_message_text("Invalid package.", reply_markup=main_menu_button())
             return
         context.user_data["awaiting_screenshot"] = package_key
         pkg = SUBSCRIPTION_PACKAGES[package_key]
@@ -501,19 +631,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             qr_buf = generate_upi_qr(pkg["price"], note=f"{BRAND_NAME} {pkg['label']}")
             caption = (
-                f"\U0001f4b3 <b>Scan to Pay - {pkg['label']}</b>\n\n"
-                f"\U0001f4b5 <b>Amount:</b> \u20b9{pkg['price']}\n"
-                f"\U0001f4b0 <b>Access:</b> Unlimited lookups\n"
-                f"\U0001f4c5 <b>Duration:</b> {pkg['label']}\n\n"
-                f"\U0001f4b3 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
-                f"\U0001f464 <b>Name:</b> {UPI_NAME}\n\n"
-                "\U0001f4f8 After payment, <b>send the screenshot</b> of the confirmation below.\n"
+                f"💳 <b>Scan to Pay - {pkg['label']}</b>\n\n"
+                f"💵 <b>Amount:</b> ₹{pkg['price']}\n"
+                f"💰 <b>Access:</b> Unlimited lookups\n"
+                f"📅 <b>Duration:</b> {pkg['label']}\n\n"
+                f"💳 <b>UPI ID:</b> <code>{UPI_ID}</code>\n"
+                f"👤 <b>Name:</b> {UPI_NAME}\n\n"
+                "📸 After payment, <b>send the screenshot</b> of the confirmation below.\n"
                 "Make sure the screenshot shows:\n"
-                "\u2022 UPI ID paid to\n"
-                "\u2022 Amount paid\n"
-                "\u2022 Transaction reference/ID"
+                "• UPI ID paid to\n"
+                "• Amount paid\n"
+                "• Transaction reference/ID"
             )
-            # Delete previous message and send QR as photo
             try:
                 await query.message.delete()
             except Exception:
@@ -522,24 +651,23 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=query.message.chat.id,
                 photo=qr_buf,
                 caption=caption,
-                reply_markup=back_button(),
+                reply_markup=main_menu_button(),
                 parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"QR generation failed: {e}")
-            # Fallback: send text without QR
             msg_text = (
-                f"\U0001f4f8 <b>Send payment screenshot</b>\n\n"
-                f"You selected: <b>{pkg['label']}</b> (\u20b9{pkg['price']})\n\n"
-                f"\U0001f4b3 <b>Send payment to:</b>\n"
+                f"📸 <b>Send payment screenshot</b>\n\n"
+                f"You selected: <b>{pkg['label']}</b> (₹{pkg['price']})\n\n"
+                f"💳 <b>Send payment to:</b>\n"
                 f"<code>{UPI_ID}</code>\n"
                 f"Name: {UPI_NAME}\n"
-                f"Amount: \u20b9{pkg['price']}\n\n"
+                f"Amount: ₹{pkg['price']}\n\n"
                 "Upload the payment confirmation screenshot now.\n"
                 "Make sure the screenshot shows:\n"
-                "\u2022 UPI ID paid to\n"
-                "\u2022 Amount\n"
-                "\u2022 Transaction reference/ID"
+                "• UPI ID paid to\n"
+                "• Amount\n"
+                "• Transaction reference/ID"
             )
             try:
                 await query.edit_message_text(msg_text, parse_mode="HTML")
@@ -553,40 +681,46 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("pending_package", None)
         try:
             await query.edit_message_text(
-                "\u274c Payment cancelled.\n\nChoose an option:",
-                reply_markup=back_button(),
+                "❌ Payment cancelled.\n\nChoose an option:",
+                reply_markup=main_menu_button(),
             )
         except BadRequest:
             await query.message.reply_text(
-                "\u274c Payment cancelled.\n\nChoose an option:",
-                reply_markup=back_button(),
+                "❌ Payment cancelled.\n\nChoose an option:",
+                reply_markup=main_menu_button(),
             )
         return
 
-    # Admin: Approve transaction - set subscription
+    # Admin: Approve transaction
     if data.startswith("approve_"):
+        if user.id not in ADMIN_IDS:
+            return
         tx_id = int(data.replace("approve_", ""))
         await _approve_transaction(tx_id, context, query)
         return
 
     # Admin: Reject transaction
     if data.startswith("reject_"):
+        if user.id not in ADMIN_IDS:
+            return
         tx_id = int(data.replace("reject_", ""))
         await _reject_transaction(tx_id, context, query)
         return
 
     # Admin: Confirm ban
     if data.startswith("doban_"):
+        if user.id not in ADMIN_IDS:
+            return
         ban_uid = int(data.replace("doban_", ""))
         db.ban_user(ban_uid)
         try:
             await query.edit_message_text(
-                f"\U0001f6ab User <code>{ban_uid}</code> has been banned.",
+                f"🚫 User <code>{ban_uid}</code> has been banned.",
                 parse_mode="HTML",
             )
         except BadRequest:
             await query.message.reply_text(
-                f"\U0001f6ab User <code>{ban_uid}</code> has been banned.",
+                f"🚫 User <code>{ban_uid}</code> has been banned.",
                 parse_mode="HTML",
             )
         return
@@ -594,9 +728,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cancel action
     if data == "cancel_action":
         try:
-            await query.edit_message_text("\u274c Action cancelled.", reply_markup=back_button())
+            await query.edit_message_text("❌ Action cancelled.", reply_markup=main_menu_button())
         except BadRequest:
-            await query.message.reply_text("\u274c Action cancelled.", reply_markup=back_button())
+            await query.message.reply_text("❌ Action cancelled.", reply_markup=main_menu_button())
         return
 
     # Export report as image + PDF
@@ -605,27 +739,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lookup_data = context.user_data.get("last_lookup")
         if not lookup_data:
             await query.edit_message_text(
-                "\u274c No data to export. Please run a lookup first.",
-                reply_markup=back_button(),
+                "❌ No data to export. Please run a lookup first.",
+                reply_markup=main_menu_button(),
             )
             return
 
-        await query.answer("\U0001f4f7 Generating reports...")
+        await query.answer("🖼 Generating reports...")
 
-        # Send image report
         try:
             from exporter import generate_report_image
             image_buffer = generate_report_image(lookup_data)
             await context.bot.send_photo(
                 chat_id=query.message.chat.id,
                 photo=image_buffer,
-                caption=f"\U0001f4f7 <b>Image Report</b> for {export_number}",
+                caption=f"🖼 <b>Image Report</b> for {export_number}",
                 parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"Image export failed: {e}")
 
-        # Send PDF report
         try:
             from pdf_exporter import generate_osint_pdf
             pdf_buffer = generate_osint_pdf(lookup_data)
@@ -633,7 +765,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=query.message.chat.id,
                 document=pdf_buffer,
                 filename=f"OSINT_{export_number}.pdf",
-                caption=f"\U0001f4c4 <b>PDF Report</b> for {export_number}",
+                caption=f"📄 <b>PDF Report</b> for {export_number}",
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -646,13 +778,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lookups = db.get_user_lookup_history(user.id, limit=10)
         if not lookups:
             await query.edit_message_text(
-                "\U0001f4cb <b>No lookups yet.</b>\nDo a lookup first!",
-                reply_markup=back_button(),
+                "📋 <b>No lookups yet.</b>\nDo a lookup first!",
+                reply_markup=main_menu_button(),
                 parse_mode="HTML",
             )
         else:
             await query.edit_message_text(
-                "\U0001f4cb <b>Tap to re-export (no credits):</b>",
+                "📋 <b>Tap to re-export (no credits):</b>",
                 reply_markup=history_list_keyboard(lookups),
                 parse_mode="HTML",
             )
@@ -663,10 +795,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lookup_id = int(data.replace("reexport_", ""))
         cached = db.get_lookup_by_id(lookup_id, user.id)
         if not cached:
-            await query.edit_message_text("\u274c Lookup not found.", reply_markup=back_button())
+            await query.edit_message_text("❌ Lookup not found.", reply_markup=main_menu_button())
             return
         await query.edit_message_text(
-            f"\U0001f4f1 Re-export <b>{cached['username']}</b>\n\n"
+            f"📱 Re-export <b>{cached['username']}</b>\n\n"
             "Tap below to generate the image:",
             reply_markup=reexport_keyboard(lookup_id, cached["username"]),
             parse_mode="HTML",
@@ -678,10 +810,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lookup_id = int(data.replace("reexportimg_", ""))
         cached = db.get_lookup_by_id(lookup_id, user.id)
         if not cached:
-            await query.edit_message_text("\u274c Lookup not found.", reply_markup=back_button())
+            await query.edit_message_text("❌ Lookup not found.", reply_markup=main_menu_button())
             return
 
-        await query.answer("\U0001f4f7 Generating report...")
+        await query.answer("🖼 Generating report...")
 
         try:
             import json as _json
@@ -691,14 +823,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=query.message.chat.id,
                 photo=image_buffer,
-                caption=f"\U0001f4f7 <b>Re-exported Report</b> for {cached['username']}",
+                caption=f"🖼 <b>Re-exported Report</b> for {cached['username']}",
                 parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"Re-export failed: {e}")
             await query.edit_message_text(
-                f"\u274c <b>Export failed</b>\n\nError: {str(e)[:200]}",
-                reply_markup=main_menu_keyboard(),
+                f"❌ <b>Export failed</b>\n\nError: {str(e)[:200]}",
+                reply_markup=main_menu_button(),
                 parse_mode="HTML",
             )
         return
@@ -739,31 +871,29 @@ async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     }
     
-    # Send demo text report
     text_report = generate_text_report(demo_data)
     await update.message.reply_text(
         f"<pre>{text_report}</pre>",
         parse_mode="HTML",
     )
     
-    # Send demo PDF
     try:
         pdf_buffer = generate_osint_pdf(demo_data)
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
             document=pdf_buffer,
             filename="DEMO_OSINT_REPORT.pdf",
-            caption="\U0001f4c4 <b>Demo PDF Report</b>\nThis is how your reports will look.",
+            caption="📄 <b>Demo PDF Report</b>\nThis is how your reports will look.",
             parse_mode="HTML",
         )
     except Exception as e:
         logger.error(f"Demo PDF failed: {e}")
     
     await update.message.reply_text(
-        "\u2139\ufe0f <b>That was a demo!</b>\n"
+        "ℹ️ <b>That was a demo!</b>\n"
         "Enter a real phone number to get actual OSINT data.\n"
-        "Tap 'Phone Lookup' to start.",
-        reply_markup=main_menu_keyboard(),
+        "Tap '💰 Buy Plan' to start.",
+        reply_markup=main_menu_keyboard(), 
         parse_mode="HTML",
     )
 
@@ -773,30 +903,45 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_admin_user = user.id in ADMIN_IDS
 
-    # Check if banned
+    # Enforce channel join for non-admins
+    if not is_admin_user:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+
     if db.is_banned(user.id):
         await update.message.reply_text(
-            "\U0001f6ab You are <b>banned</b> from using this bot.\nContact admin for support.",
+            "🚫 You are <b>banned</b> from using this bot.\nContact admin for support.",
             parse_mode="HTML",
         )
         return
 
-    # Check subscription (admins skip check)
     if not is_admin_user:
         if not db.has_active_subscription(user.id):
             await update.message.reply_text(
-                "\u26a0\ufe0f <b>No Active Subscription!</b>\n\n"
+                "⚠️ <b>No Active Subscription!</b>\n\n"
                 "You need an active subscription to use the bot.\n"
                 "Buy a package for unlimited lookups!",
                 reply_markup=main_menu_keyboard(), parse_mode="HTML",
             )
             return
 
-    # Rate limit check
     allowed, wait_secs = _check_rate_limit(user.id)
     if not allowed:
         rate_msg = (
-            f"\u23f0 <b>Rate Limit!</b>\n\n"
+            f"⏰ <b>Rate Limit!</b>\n\n"
             f"You've made {RATE_LIMIT_MAX} lookups in the last minute.\n"
             f"Please wait <b>{wait_secs}s</b> before trying again.\n\n"
             "This prevents API abuse and keeps the bot running for everyone."
@@ -808,13 +953,11 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Extract phone number from message
     phone_number = update.message.text.strip().replace(" ", "").replace("-", "").replace("+", "")
 
-    # Validate - only digits, 10-15 characters
     if not phone_number or not phone_number.isdigit() or len(phone_number) < 10 or len(phone_number) > 15:
         await update.message.reply_text(
-            "\u274c <b>Invalid phone number!</b>\n\n"
+            "❌ <b>Invalid phone number!</b>\n\n"
             "Please enter a valid phone number.\n"
             "Example: <code>9876543210</code>",
             reply_markup=main_menu_keyboard(),
@@ -822,19 +965,16 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Show loading
     loading_msg = await update.message.reply_text(
-        f"\U0001f50d <b>Looking up</b> <code>{phone_number}</code>...\nPlease wait.",
+        f"🔍 <b>Looking up</b> <code>{phone_number}</code>...\nPlease wait.",
         parse_mode="HTML",
     )
 
-    # Call both APIs in parallel
     result_num, result_leak = await asyncio.gather(
         api_client.lookup_number(phone_number),
         api_client.lookup_numleak(phone_number),
     )
 
-    # Check if at least one API succeeded
     logger.info(f"Number API: success={result_num['success']}, error={result_num.get('error')}")
     logger.info(f"Numleak API: success={result_leak['success']}, error={result_leak.get('error')}")
 
@@ -842,7 +982,7 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         err_num = result_num.get('error', 'Unknown')
         err_leak = result_leak.get('error', 'Unknown')
         await loading_msg.edit_text(
-            f"\u274c <b>Lookup Failed</b>\n\n"
+            f"❌ <b>Lookup Failed</b>\n\n"
             f"Number API: {err_num}\n"
             f"Numleak API: {err_leak}\n\n"
             "Please try again later or contact @HATHI02.",
@@ -850,18 +990,14 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check if we got any data (numleak has chain OR calltracer)
     num_data = result_num.get("data", {}) if result_num["success"] else {}
     numleak_data_raw = result_leak.get("data", {}) if result_leak["success"] else {}
     has_num_data = bool(num_data.get("results"))
     has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
 
     logger.info(f"Data check: has_num_data={has_num_data}, has_leak_data={has_leak_data}")
-    logger.info(f"num_data keys={list(num_data.keys()) if num_data else 'empty'}")
-    logger.info(f"numleak_data keys={list(numleak_data_raw.keys()) if numleak_data_raw else 'empty'}")
 
     if not has_num_data and not has_leak_data:
-        # Show what we actually got for debugging
         details = []
         if result_num["success"] and num_data:
             details.append(f"Number API: got response with keys {list(num_data.keys())}")
@@ -869,21 +1005,18 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             details.append(f"Numleak API: got response with keys {list(numleak_data_raw.keys())}")
         detail_str = "\n".join(details) if details else "APIs returned empty data."
         await loading_msg.edit_text(
-            f"\u274c <b>No data found</b> for <code>{phone_number}</code>.\n\n"
+            f"❌ <b>No data found</b> for <code>{phone_number}</code>.\n\n"
             f"{detail_str}\n\n"
             "The number may not exist in the database or the API is rate limited.",
             parse_mode="HTML",
         )
         return
 
-    # Record the lookup (no credit deduction - unlimited access)
     if not is_admin_user:
         db.record_lookup(user.id)
 
-    # Record this lookup for rate limiting
     _record_lookup(user.id)
 
-    # Merge data for storage
     combined_data = {
         "number": phone_number,
         "number_data": result_num.get("data", {}),
@@ -891,7 +1024,6 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     db.log_lookup(user.id, phone_number, True)
-    # Save full API response for re-export
     db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
 
     try:
@@ -899,7 +1031,6 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # PART 1: Send hacker-style text report
     from pdf_exporter import generate_text_report, generate_osint_pdf
     
     text_report = generate_text_report(combined_data)
@@ -923,27 +1054,25 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
         )
 
-    # PART 2: Send PDF report
     try:
         pdf_buffer = generate_osint_pdf(combined_data)
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
             document=pdf_buffer,
             filename=f"OSINT_{phone_number}.pdf",
-            caption=f"\U0001f4c4 <b>PDF Report</b> for <code>{phone_number}</code>",
+            caption=f"📄 <b>PDF Report</b> for <code>{phone_number}</code>",
             parse_mode="HTML",
         )
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
         await update.message.reply_text(
-            f"\u26a0\ufe0f PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
+            f"⚠️ PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
             parse_mode="HTML",
         )
 
-    # PART 3: Summary header
     header = (
-        f"\U0001f4f1 <b>Lookup Complete for {phone_number}</b>\n"
-        f"\U0001f4b0 <b>Unlimited lookups</b> \u2014 Active subscription"
+        f"📱 <b>Lookup Complete for {phone_number}</b>\n"
+        f"💰 <b>Unlimited lookups</b> — Active subscription"
     )
     await update.message.reply_text(
         header,
@@ -951,12 +1080,10 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Store data for export
     context.user_data["last_lookup"] = combined_data
 
-    # PART 4: Export button
     await update.message.reply_text(
-        "\U0001f4e5 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
+        "📥 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
         reply_markup=export_keyboard(phone_number),
         parse_mode="HTML",
     )
@@ -969,7 +1096,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not lookups:
         text = (
-            "\U0001f4cb <b>Lookup History</b>\n\n"
+            "📋 <b>Lookup History</b>\n\n"
             "No lookups yet.\n"
             "Do a lookup first, then you can re-export past reports here."
         )
@@ -977,7 +1104,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = (
-        "\U0001f4cb <b>Lookup History</b>\n\n"
+        "📋 <b>Lookup History</b>\n\n"
         "Tap a lookup to re-export it (no credits needed):"
     )
     await update.message.reply_text(
@@ -988,7 +1115,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle payment screenshot upload - creates pending transaction for admin approval."""
+    """Handle payment screenshot upload."""
     user = update.effective_user
     awaiting = context.user_data.get("awaiting_screenshot")
 
@@ -1004,22 +1131,21 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         screenshot_file_id = update.message.document.file_id
     else:
         await update.message.reply_text(
-            "\u274c Please send a <b>photo</b> or <b>document</b> screenshot.",
+            "❌ Please send a <b>photo</b> or <b>document</b> screenshot.",
             parse_mode="HTML",
         )
         return
 
-    # Create transaction as pending (admin must approve)
     tx_id = db.create_transaction(user.id, awaiting, pkg["duration_hours"], pkg["price"], screenshot_file_id)
 
     context.user_data.pop("awaiting_screenshot", None)
     context.user_data.pop("pending_package", None)
 
     await update.message.reply_text(
-        f"\u23f3 <b>Payment Screenshot Received!</b>\n\n"
+        f"⏳ <b>Payment Screenshot Received!</b>\n\n"
         f"Package: <b>{pkg['label']}</b>\n"
-        f"Amount: \u20b9{pkg['price']}\n"
-        f"\U0001f4e2 Transaction ID: <code>#{tx_id}</code>\n\n"
+        f"Amount: ₹{pkg['price']}\n"
+        f"📢 Transaction ID: <code>#{tx_id}</code>\n\n"
         "Your payment is being verified by an admin.\n"
         "You will be notified once it's approved.\n\n"
         "This usually takes a few minutes.",
@@ -1027,16 +1153,15 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Notify admins with approve/reject buttons
     from keyboards import admin_approve_keyboard
     for admin_id in ADMIN_IDS:
         try:
             admin_text = (
-                f"\U0001f4e2 <b>New Payment - Pending Approval</b>\n\n"
+                f"📢 <b>New Payment - Pending Approval</b>\n\n"
                 f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
                 f"User ID: <code>{user.id}</code>\n"
                 f"Package: <b>{pkg['label']}</b>\n"
-                f"Amount: \u20b9{pkg['price']}\n"
+                f"Amount: ₹{pkg['price']}\n"
                 f"Duration: {pkg['label']}\n"
                 f"Transaction: <code>#{tx_id}</code>\n\n"
                 "Review the screenshot and approve or reject:"
@@ -1050,17 +1175,15 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Failed to notify admin {admin_id}: {e}")
-            # Fallback: text-only notification
             try:
                 await context.bot.send_message(
                     admin_id,
-                    f"\U0001f4e2 <b>New Payment - Pending Approval</b>\n\n"
+                    f"📢 <b>New Payment - Pending Approval</b>\n\n"
                     f"User: <b>{user.first_name}</b> (@{user.username or 'N/A'})\n"
                     f"User ID: <code>{user.id}</code>\n"
                     f"Package: <b>{pkg['label']}</b>\n"
-                    f"Amount: \u20b9{pkg['price']}\n"
-                    f"Transaction: <code>#{tx_id}</code>\n"
-                    f"Screenshot file ID: <code>{screenshot_file_id}</code>\n\n"
+                    f"Amount: ₹{pkg['price']}\n"
+                    f"Transaction: <code>#{tx_id}</code>\n\n"
                     f"Approve: /approve_{tx_id}\n"
                     f"Reject: /reject_{tx_id}",
                     parse_mode="HTML",

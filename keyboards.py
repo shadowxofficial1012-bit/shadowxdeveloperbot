@@ -4,40 +4,39 @@ from telegram import (
     ReplyKeyboardMarkup,
     KeyboardButton,
 )
-from config import SUBSCRIPTION_PACKAGES
+from config import SUBSCRIPTION_PACKAGES, REQUIRED_CHANNELS
 
 
 def main_menu_keyboard():
-    """Main menu reply keyboard."""
+    """Main menu reply keyboard matching the screenshot design."""
     keyboard = [
-        [KeyboardButton("\U0001f50d Phone Lookup"), KeyboardButton("\U0001f4ca Demo Result")],
-        [KeyboardButton("\U0001f4b0 My Balance"), KeyboardButton("\U0001f4b3 Buy Access")],
-        [KeyboardButton("\U0001f4cb My History"), KeyboardButton("\U0001f4dd Help")],
-        [KeyboardButton("\U0001f464 Profile")],
+        [KeyboardButton("📱 Phone Lookup"), KeyboardButton("💰 Buy Plan")],
+        [KeyboardButton("🎁 Redeem Code"), KeyboardButton("❓ Help Guide")],
+        [KeyboardButton("🤳 Contact Admin"), KeyboardButton("🔧 Admin Panel")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
 def admin_keyboard():
-    """Admin panel reply keyboard."""
+    """Admin panel reply keyboard matching the screenshot design."""
     keyboard = [
-        [KeyboardButton("\U0001f4ca Stats"), KeyboardButton("\U0001f4e6 Pending Payments")],
-        [KeyboardButton("\U0001f464 User Lookup"), KeyboardButton("\U0001f4b0 Add Access")],
-        [KeyboardButton("\u23f0 Add Hours")],
-        [KeyboardButton("\U0001f6ab Ban User"), KeyboardButton("\U0001f51a Unban User")],
-        [KeyboardButton("\U0001f465 All Users"), KeyboardButton("\U0001f50d Lookup Logs")],
-        [KeyboardButton("\U0001f4e2 Broadcast"), KeyboardButton("\U0001f519 Main Menu")],
+        [KeyboardButton("✅ Activate Plan")],
+        [KeyboardButton("💳 Add Credits")],
+        [KeyboardButton("👤 Check User")],
+        [KeyboardButton("🎁 Create Code")],
+        [KeyboardButton("📋 View All Codes")],
+        [KeyboardButton("🏠 Main Menu")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def buy_credits_keyboard():
+def buy_plan_keyboard():
     """Inline keyboard for subscription packages."""
     buttons = []
     for key, pkg in SUBSCRIPTION_PACKAGES.items():
-        text = f"\U0001f4b0 {pkg['label']} \u2014 Unlimited \u2022 \u20b9{pkg['price']}"
+        text = f"💰 {pkg['label']} — Unlimited • ₹{pkg['price']}"
         buttons.append([InlineKeyboardButton(text, callback_data=f"buy_{key}")])
-    buttons.append([InlineKeyboardButton("\u21a9\ufe0f Back", callback_data="back_main")])
+    buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="back_main")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -46,8 +45,8 @@ def confirm_payment_keyboard(package_key: str):
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("\u2705 Confirm Payment", callback_data=f"confirm_{package_key}"),
-                InlineKeyboardButton("\u274c Cancel", callback_data="cancel_payment"),
+                InlineKeyboardButton("✅ Confirm Payment", callback_data=f"confirm_{package_key}"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel_payment"),
             ]
         ]
     )
@@ -58,8 +57,8 @@ def admin_approve_keyboard(tx_id: int):
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("\u2705 Approve", callback_data=f"approve_{tx_id}"),
-                InlineKeyboardButton("\u274c Reject", callback_data=f"reject_{tx_id}"),
+                InlineKeyboardButton("✅ Approve", callback_data=f"approve_{tx_id}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"reject_{tx_id}"),
             ]
         ]
     )
@@ -67,7 +66,12 @@ def admin_approve_keyboard(tx_id: int):
 
 def back_button(target: str = "back_main"):
     """Simple back button."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("\u21a9\ufe0f Back", callback_data=target)]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=target)]])
+
+
+def main_menu_button():
+    """Main menu inline button."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Main Menu", callback_data="back_main")]])
 
 
 def confirm_ban_keyboard(user_id: int):
@@ -75,8 +79,8 @@ def confirm_ban_keyboard(user_id: int):
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("\u2705 Yes, Ban", callback_data=f"doban_{user_id}"),
-                InlineKeyboardButton("\u274c Cancel", callback_data="cancel_action"),
+                InlineKeyboardButton("✅ Yes, Ban", callback_data=f"doban_{user_id}"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel_action"),
             ]
         ]
     )
@@ -88,13 +92,13 @@ def export_keyboard(username: str):
         [
             [
                 InlineKeyboardButton(
-                    "\U0001f4f7 Export as Image",
+                    "🖼 Export as Image",
                     callback_data=f"export_{username}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "\U0001f519 Back to Menu",
+                    "🏠 Back to Menu",
                     callback_data="back_main",
                 )
             ],
@@ -106,9 +110,9 @@ def history_list_keyboard(lookups: list):
     """Inline keyboard showing past lookups for re-export."""
     buttons = []
     for entry in lookups:
-        text = f"\U0001f4f1 @{entry['username']} - {entry['created_at'][:10]}"
+        text = f"📱 @{entry['username']} - {entry['created_at'][:10]}"
         buttons.append([InlineKeyboardButton(text, callback_data=f"reexport_{entry['id']}")])
-    buttons.append([InlineKeyboardButton("\u21a9\ufe0f Back", callback_data="back_main")])
+    buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="back_main")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -118,15 +122,39 @@ def reexport_keyboard(lookup_id: int, username: str):
         [
             [
                 InlineKeyboardButton(
-                    f"\U0001f4f7 Export @{username} as Image",
+                    f"🖼 Export @{username} as Image",
                     callback_data=f"reexportimg_{lookup_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "\u21a9\ufe0f Back to History",
+                    "⬅️ Back to History",
                     callback_data="history",
                 )
             ],
         ]
     )
+
+
+def required_channels_keyboard():
+    """Inline keyboard showing required channels to join with verify button."""
+    buttons = []
+    for channel in REQUIRED_CHANNELS:
+        channel_name = channel.replace("@", "")
+        buttons.append([
+            InlineKeyboardButton(
+                f"📢 Join @{channel_name}",
+                url=f"https://t.me/{channel_name}",
+            )
+        ])
+    buttons.append([
+        InlineKeyboardButton("🔄 I've Joined - Verify", callback_data="verify_channels")
+    ])
+    return InlineKeyboardMarkup(buttons)
+
+
+def redeem_code_keyboard():
+    """Keyboard shown when user taps Redeem Code."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_main")]
+    ])

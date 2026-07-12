@@ -14,32 +14,27 @@ from config import BOT_TOKEN, ADMIN_IDS
 from handlers import (
     start,
     help_command,
-    profile,
-    balance,
-    history,
-    buy_credits,
+    contact_admin,
+    handle_redeem_code,
+    process_redeem_code,
+    buy_plan,
     handle_callback,
     handle_lookup,
     handle_screenshot,
     demo_result,
     handle_approve_command,
     handle_reject_command,
+    check_user_channels,
 )
+from keyboards import required_channels_keyboard
 from admin import (
     admin_start,
-    admin_stats,
-    admin_pending,
+    admin_activate_plan,
     admin_add_credits,
-    admin_set_credits,
-    admin_reset_credits,
-    admin_ban,
-    admin_unban,
-    admin_user_lookup,
-    admin_all_users,
-    admin_lookup_logs,
-    admin_broadcast,
+    admin_check_user,
+    admin_create_code,
+    admin_view_codes,
     handle_admin_text,
-    handle_pending_command,
 )
 
 logging.basicConfig(
@@ -55,17 +50,16 @@ async def error_handler(update: object, context) -> None:
 
     if isinstance(context.error, Conflict):
         logger.warning("Conflict detected - another instance may be running. Retrying...")
-        return  # Just log and continue
+        return
     
     if isinstance(context.error, (TimedOut, NetworkError)):
         logger.warning(f"Network error: {context.error}")
         return
 
-    # For other errors, try to notify the user if possible
     if isinstance(update, Update) and update.effective_message:
         try:
             await update.effective_message.reply_text(
-                "\u26a0\ufe0f An error occurred. Please try again."
+                "⚠️ An error occurred. Please try again."
             )
         except Exception:
             pass
@@ -81,64 +75,69 @@ async def handle_text(update: Update, context):
         if handled:
             return
 
-    # Check if awaiting screenshot
+    # Check if awaiting screenshot - allow without channel check
     if context.user_data.get("awaiting_screenshot"):
         await update.message.reply_text(
-            "\U0001f4f8 Please send a <b>photo</b> or <b>document</b> as the payment screenshot.",
+            "📸 Please send a <b>photo</b> or <b>document</b> as the payment screenshot.",
             parse_mode="HTML",
         )
         return
 
-    # Route by button text
+    # Check if awaiting redeem code
+    if context.user_data.get("awaiting_redeem_code"):
+        context.user_data.pop("awaiting_redeem_code", None)
+        await process_redeem_code(update, context)
+        return
+
+    # Enforce channel join for non-admins on all user routes
+    if update.effective_user.id not in ADMIN_IDS:
+        is_member, not_joined = await check_user_channels(update.effective_user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            join_text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels before using this bot:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                join_text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+
+    # Route by button text - Main Menu buttons
     routes = {
-        "\U0001f50d Phone Lookup": "lookup",
-        "\U0001f4b0 My Balance": "balance",
-        "\U0001f4b3 Buy Access": "buy",
-        "\U0001f4b3 Buy Credits": "buy",  # Keep both for compatibility
-        "\U0001f4cb My History": "history",
-        "\U0001f4dd Help": "help",
-        "\U0001f464 Profile": "profile",
-        "\U0001f4ca Demo Result": "demo",
+        "💰 Buy Plan": "buy",
+        "🎁 Redeem Code": "redeem",
+        "❓ Help Guide": "help",
+        "🤳 Contact Admin": "contact",
+        "🔧 Admin Panel": "admin",
     }
 
     if text in routes:
         route = routes[text]
-        if route == "lookup":
-            await update.message.reply_text(
-                "\U0001f50d <b>Enter Phone Number:</b>\n\n"
-                "Type the 10-digit phone number:\n"
-                "Example: <code>9876543210</code>",
-                parse_mode="HTML",
-            )
-            context.user_data["awaiting_number"] = True
-        elif route == "balance":
-            await balance(update, context)
-        elif route == "buy":
-            await buy_credits(update, context)
-        elif route == "history":
-            await history(update, context)
+        if route == "buy":
+            await buy_plan(update, context)
+        elif route == "redeem":
+            await handle_redeem_code(update, context)
         elif route == "help":
             await help_command(update, context)
-        elif route == "profile":
-            await profile(update, context)
-        elif route == "demo":
-            await demo_result(update, context)
+        elif route == "contact":
+            await contact_admin(update, context)
+        elif route == "admin":
+            await admin_start(update, context)
         return
 
-    # Admin buttons
+    # Admin panel buttons
     admin_routes = {
-        "\U0001f4ca Stats": admin_stats,
-        "\U0001f4e6 Pending Payments": admin_pending,
-        "\U0001f4b0 Add Credits": admin_add_credits,
-        "\U0001f48e Set Credits": admin_set_credits,
-        "\U0001f4b1 Reset Credits": admin_reset_credits,
-        "\U0001f6ab Ban User": admin_ban,
-        "\U0001f51a Unban User": admin_unban,
-        "\U0001f464 User Lookup": admin_user_lookup,
-        "\U0001f465 All Users": admin_all_users,
-        "\U0001f50d Lookup Logs": admin_lookup_logs,
-        "\U0001f4e2 Broadcast": admin_broadcast,
-        "\U0001f519 Main Menu": admin_start,
+        "✅ Activate Plan": admin_activate_plan,
+        "💳 Add Credits": admin_add_credits,
+        "👤 Check User": admin_check_user,
+        "🎁 Create Code": admin_create_code,
+        "📋 View All Codes": admin_view_codes,
+        "🏠 Main Menu": admin_start,
     }
 
     if text in admin_routes and update.effective_user.id in ADMIN_IDS:
@@ -170,15 +169,13 @@ async def handle_document(update: Update, context):
 def main():
     """Start the bot."""
     if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        print("\u274c Error: Set your BOT_TOKEN in .env file or environment variables!")
+        print("❌ Error: Set your BOT_TOKEN in .env file or environment variables!")
         print("Create a .env file with: BOT_TOKEN=your_token_here")
         return
 
-    # Initialize database
     db.init_db()
-    print("\u2705 Database initialized")
+    print("✅ Database initialized")
 
-    # Build application
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Command handlers
@@ -188,7 +185,6 @@ def main():
     app.add_handler(CommandHandler("demo", demo_result))
     app.add_handler(CommandHandler("approve", handle_approve_command))
     app.add_handler(CommandHandler("reject", handle_reject_command))
-    app.add_handler(CommandHandler("pending", handle_pending_command))
 
     # Callback handler (inline buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))
@@ -203,8 +199,8 @@ def main():
     # Add error handler
     app.add_error_handler(error_handler)
 
-    print("\U0001f680 Phone OSINT Bot is starting...")
-    print(f"\U0001f464 Admin IDs: {ADMIN_IDS}")
+    print("🚀 Phone OSINT Bot is starting...")
+    print(f"👤 Admin IDs: {ADMIN_IDS}")
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,

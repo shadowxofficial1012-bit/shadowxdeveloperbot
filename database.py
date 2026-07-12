@@ -1,5 +1,7 @@
 import os
 import sqlite3
+import secrets
+import string
 from datetime import datetime
 from datetime import datetime, timedelta
 from config import DB_PATH, FREE_TRIAL_HOURS
@@ -82,6 +84,20 @@ def init_db():
         )
     """)
 
+    # Redeem codes table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS redeem_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            hours INTEGER NOT NULL DEFAULT 24,
+            is_used INTEGER DEFAULT 0,
+            used_by INTEGER,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            used_at TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -161,10 +177,8 @@ def set_subscription(user_id, duration_hours):
         try:
             current_expiry = datetime.fromisoformat(row["subscription_expiry"])
             if current_expiry > now:
-                # Extend from current expiry
                 new_expiry = current_expiry + timedelta(hours=duration_hours)
             else:
-                # Expired, start from now
                 new_expiry = now + timedelta(hours=duration_hours)
         except (ValueError, TypeError):
             new_expiry = now + timedelta(hours=duration_hours)
@@ -368,3 +382,91 @@ def get_stats():
         "pending_transactions": pending,
         "total_hours_issued": total_hours_issued,
     }
+
+
+# ==================== REDEEM CODE FUNCTIONS ====================
+
+def generate_redeem_code(hours=24, created_by=None):
+    """Generate a new redeem code."""
+    code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO redeem_codes (code, hours, created_by) VALUES (?, ?, ?)",
+        (code, hours, created_by),
+    )
+    conn.commit()
+    conn.close()
+    return code
+
+
+def generate_bulk_codes(count=5, hours=24, created_by=None):
+    """Generate multiple redeem codes."""
+    codes = []
+    for _ in range(count):
+        code = generate_redeem_code(hours, created_by)
+        codes.append(code)
+    return codes
+
+
+def redeem_code(code, user_id):
+    """Redeem a code for a user. Returns (success, message, hours)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM redeem_codes WHERE code = ?", (code.upper().strip(),))
+    row = c.fetchone()
+    
+    if not row:
+        conn.close()
+        return False, "❌ Invalid redeem code!", 0
+    
+    code_data = dict(row)
+    
+    if code_data["is_used"]:
+        conn.close()
+        return False, "❌ This code has already been used!", 0
+    
+    # Mark as used
+    c.execute(
+        "UPDATE redeem_codes SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?",
+        (user_id, code_data["code"]),
+    )
+    conn.commit()
+    conn.close()
+    
+    # Activate subscription
+    hours = code_data["hours"]
+    expiry = set_subscription(user_id, hours)
+    
+    return True, f"✅ Code redeemed! {hours}h subscription activated.\nExpires: {expiry[:16]}", hours
+
+
+def get_all_redeem_codes(limit=50):
+    """Get all redeem codes (admin view)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM redeem_codes ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_redeem_code_stats():
+    """Get redeem code statistics."""
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute("SELECT COUNT(*) as total FROM redeem_codes")
+    total = c.fetchone()["total"]
+    
+    c.execute("SELECT COUNT(*) as used FROM redeem_codes WHERE is_used = 1")
+    used = c.fetchone()["used"]
+    
+    c.execute("SELECT COUNT(*) as unused FROM redeem_codes WHERE is_used = 0")
+    unused = c.fetchone()["unused"]
+    
+    conn.close()
+    return {"total": total, "used": used, "unused": unused}

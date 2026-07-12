@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 import database as db
-from keyboards import admin_keyboard, admin_approve_keyboard
+from keyboards import admin_keyboard, admin_approve_keyboard, main_menu_keyboard
 from config import ADMIN_IDS
 
 logger = logging.getLogger(__name__)
@@ -17,220 +17,114 @@ def is_admin(user_id: int) -> bool:
 async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin panel entry point."""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("\U0001f6ab <b>Access Denied.</b>", parse_mode="HTML")
+        await update.message.reply_text("🚫 <b>Access Denied.</b>", parse_mode="HTML")
         return
 
     stats = db.get_stats()
+    code_stats = db.get_redeem_code_stats()
     text = (
-        f"\U0001f3f7\ufe0f <b>Admin Panel</b>\n\n"
-        f"\U0001f465 <b>Users:</b> {stats['total_users']} | "
-        f"\U0001f50d <b>Lookups:</b> {stats['total_lookups']}\n"
-        f"\U0001f4b3 <b>Revenue:</b> \u20b9{stats['total_revenue']} | "
-        f"\u23f3 <b>Pending:</b> {stats['pending_transactions']}\n\n"
-        "Choose an action \u2193"
+        f"🔧 <b>Admin Panel</b>\n\n"
+        f"👥 <b>Users:</b> {stats['total_users']} | "
+        f"🔍 <b>Lookups:</b> {stats['total_lookups']}\n"
+        f"💰 <b>Revenue:</b> ₹{stats['total_revenue']} | "
+        f"⏳ <b>Pending:</b> {stats['pending_transactions']}\n"
+        f"🎁 <b>Codes:</b> {code_stats['unused']} unused / {code_stats['total']} total\n\n"
+        "Choose an action 👇"
     )
     await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
 
 
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show bot statistics."""
+async def admin_activate_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle ✅ Activate Plan button."""
     if not is_admin(update.effective_user.id):
         return
-
-    stats = db.get_stats()
-    text = (
-        "\U0001f4ca <b>Bot Statistics</b>\n\n"
-        f"\U0001f465 <b>Total Users:</b> {stats['total_users']}\n"
-        f"\U0001f50d <b>Total Lookups:</b> {stats['total_lookups']}\n"
-        f"\U0001f4b3 <b>Revenue:</b> \u20b9{stats['total_revenue']}\n"
-        f"\U0001f4b0 <b>Hours Issued:</b> {stats['total_hours_issued']}\n"
-        f"\u23f3 <b>Pending Payments:</b> {stats['pending_transactions']}\n"
+    context.user_data["admin_action"] = "activate_plan"
+    await update.message.reply_text(
+        "✅ <b>Activate Plan</b>\n\n"
+        "Send: <b>user_id hours</b>\n"
+        "Example: <code>123456789 24</code>",
+        reply_markup=admin_keyboard(),
+        parse_mode="HTML",
     )
-    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
-
-
-async def admin_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show pending transactions."""
-    if not is_admin(update.effective_user.id):
-        return
-
-    txs = db.get_pending_transactions()
-    if not txs:
-        await update.message.reply_text(
-            "\u2705 <b>No pending transactions.</b>",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        return
-
-    for tx in txs[:5]:
-        text = (
-            f"\U0001f4e2 <b>Payment #{tx['id']}</b>\n\n"
-            f"User: <code>{tx['user_id']}</code>\n"
-            f"Package: <b>{tx['package'].title()}</b>\n"
-            f"Amount: \u20b9{tx['amount']}\n"
-            f"Duration: {tx.get('duration_hours', 0)} hours\n"
-            f"Date: {tx['created_at'][:16]}\n"
-        )
-        if tx.get("screenshot_file_id"):
-            try:
-                await context.bot.send_photo(
-                    update.effective_chat.id,
-                    photo=tx["screenshot_file_id"],
-                    caption=text,
-                    reply_markup=admin_approve_keyboard(tx["id"]),
-                    parse_mode="HTML",
-                )
-                continue
-            except Exception:
-                pass
-        await update.message.reply_text(
-            text,
-            reply_markup=admin_approve_keyboard(tx["id"]),
-            parse_mode="HTML",
-        )
 
 
 async def admin_add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Add credits to a user (admin)."""
+    """Handle 💳 Add Credits button."""
     if not is_admin(update.effective_user.id):
         return
     context.user_data["admin_action"] = "add_credits"
     await update.message.reply_text(
-        "Send: <b>user_id hours</b>\nExample: <code>123456789 24</code>",
+        "💳 <b>Add Credits</b>\n\n"
+        "Send: <b>user_id hours</b>\n"
+        "Example: <code>123456789 24</code>",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
 
 
-async def admin_set_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Set exact credits for a user."""
+async def admin_check_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 👤 Check User button."""
     if not is_admin(update.effective_user.id):
         return
-    context.user_data["admin_action"] = "set_credits"
+    context.user_data["admin_action"] = "check_user"
     await update.message.reply_text(
-        "Send: <b>user_id amount</b>\nExample: <code>123456789 50</code>",
-        reply_markup=admin_keyboard(),
-        parse_mode="HTML",
-    )
-
-
-async def admin_reset_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Reset user credits to 0."""
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data["admin_action"] = "reset_credits"
-    await update.message.reply_text(
-        "Send the <b>user_id</b> to reset credits to 0:",
-        reply_markup=admin_keyboard(),
-        parse_mode="HTML",
-    )
-
-
-async def admin_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ban a user."""
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data["admin_action"] = "ban_user"
-    await update.message.reply_text(
-        "Send the <b>user_id</b> to ban:",
-        reply_markup=admin_keyboard(),
-        parse_mode="HTML",
-    )
-
-
-async def admin_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Unban a user."""
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data["admin_action"] = "unban_user"
-    await update.message.reply_text(
-        "Send the <b>user_id</b> to unban:",
-        reply_markup=admin_keyboard(),
-        parse_mode="HTML",
-    )
-
-
-async def admin_user_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Look up a user by ID."""
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data["admin_action"] = "user_lookup"
-    await update.message.reply_text(
+        "👤 <b>Check User</b>\n\n"
         "Send a <b>user_id</b> to look up:",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
 
 
-async def admin_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show all users with pagination."""
+async def admin_create_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 🎁 Create Code button."""
     if not is_admin(update.effective_user.id):
         return
-
-    users = db.get_all_users()
-    if not users:
-        await update.message.reply_text(
-            "\U0001f465 <b>No users found.</b>",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        return
-
-    ACTIVE_EMOJI = "\u2705"
-    INACTIVE_EMOJI = "\u26a0\ufe0f"
-    BANNED_EMOJI = "\U0001f6ab"
-    text = f"\U0001f465 <b>All Users ({len(users)})</b>\n\n"
-    for i, u in enumerate(users[:20], 1):
-        status = BANNED_EMOJI if u.get("is_banned") else "\u2705"
-        username = f"@{u['username']}" if u.get("username") else "N/A"
-        is_active = u.get('subscription_expiry') and u['subscription_expiry'] > datetime.now().isoformat()[:19]
-        sub_status = f"{ACTIVE_EMOJI} Active" if is_active else f"{INACTIVE_EMOJI} Inactive"
-        text += (
-            f"{status} <code>{u['user_id']}</code> | {username}\n"
-            f"   {sub_status} | \U0001f50d {u.get('total_lookups', 0)} lookups\n"
-        )
-    if len(users) > 20:
-        text += f"\n... and {len(users) - 20} more users"
-
-    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
-
-
-async def handle_pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /pending command - shows pending transactions."""
-    await admin_pending(update, context)
-
-
-async def admin_lookup_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show recent lookup logs."""
-    if not is_admin(update.effective_user.id):
-        return
-
-    logs = db.get_recent_lookups(limit=15)
-    if not logs:
-        await update.message.reply_text(
-            "\U0001f50d <b>No lookup logs found.</b>",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        return
-
-    text = "\U0001f50d <b>Recent Lookup Logs</b>\n\n"
-    for log in logs:
-        status = "\u2705" if log.get("success") else "\u274c"
-        text += f"{status} <code>{log.get('user_id', 'N/A')}</code> | {log.get('username', 'N/A')} | {log.get('created_at', '')[:16]}\n"
-
-    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
-
-
-async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Broadcast a message to all users."""
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data["admin_action"] = "broadcast_confirm"
+    context.user_data["admin_action"] = "create_code"
     await update.message.reply_text(
-        "\U0001f4e2 <b>Broadcast Message</b>\n\n"
-        "Type the message to send to ALL users:",
+        "🎁 <b>Create Redeem Code</b>\n\n"
+        "Send: <b>count hours</b>\n"
+        "Example: <code>5 24</code> (creates 5 codes, each 24h)\n\n"
+        "Or just send <b>hours</b> for a single code.\n"
+        "Example: <code>24</code>",
         reply_markup=admin_keyboard(),
         parse_mode="HTML",
     )
+
+
+async def admin_view_codes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 📋 View All Codes button."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    stats = db.get_redeem_code_stats()
+    codes = db.get_all_redeem_codes(limit=20)
+
+    if not codes:
+        await update.message.reply_text(
+            "📋 <b>No redeem codes found.</b>\n\n"
+            "Use '🎁 Create Code' to generate codes.",
+            reply_markup=admin_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    text = (
+        f"📋 <b>Redeem Codes</b>\n\n"
+        f"📊 Total: {stats['total']} | ✅ Used: {stats['used']} | ⏳ Unused: {stats['unused']}\n\n"
+    )
+
+    for code in codes[:15]:
+        status = "✅" if code["is_used"] else "⏳"
+        used_by = f" → User {code['used_by']}" if code["is_used"] else ""
+        text += (
+            f"{status} <code>{code['code']}</code> | "
+            f"{code['hours']}h{used_by}\n"
+        )
+
+    if len(codes) > 15:
+        text += f"\n... and {len(codes) - 15} more codes"
+
+    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
 
 
 async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,123 +138,59 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text.strip()
 
-    if text in ("\U0001f519 Main Menu", "\u21a9\ufe0f Back"):
+    # Back to admin panel
+    if text in ("🏠 Main Menu", "⬅️ Back"):
         context.user_data["admin_action"] = None
         await update.message.reply_text(
-            "\U0001f3f7\ufe0f <b>Admin Panel</b>", reply_markup=admin_keyboard(), parse_mode="HTML"
+            "🔧 <b>Admin Panel</b>", reply_markup=admin_keyboard(), parse_mode="HTML"
         )
         return True
 
-    if action == "add_credits":
+    # Activate Plan / Add Credits (same logic)
+    if action in ("activate_plan", "add_credits"):
         parts = text.split()
         if len(parts) != 2:
-            await update.message.reply_text("\u274c Format: <code>user_id hours</code>\nExample: <code>123456789 24</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
+            await update.message.reply_text(
+                "❌ Format: <code>user_id hours</code>\nExample: <code>123456789 24</code>",
+                reply_markup=admin_keyboard(), parse_mode="HTML"
+            )
             return True
         try:
             uid = int(parts[0])
             hours = int(parts[1])
         except ValueError:
-            await update.message.reply_text("\u274c Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
+            await update.message.reply_text("❌ Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
 
         expiry = db.set_subscription(uid, hours)
         try:
             exp_dt = datetime.fromisoformat(expiry)
-            msg = f"\u2705 Added <b>{hours}h</b> subscription to user <code>{uid}</code>.\nExpires: {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
+            msg = f"✅ Added <b>{hours}h</b> subscription to user <code>{uid}</code>.\nExpires: {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
         except:
-            msg = f"\u2705 Added <b>{hours}h</b> subscription to user <code>{uid}</code>."
+            msg = f"✅ Added <b>{hours}h</b> subscription to user <code>{uid}</code>."
         await update.message.reply_text(msg, reply_markup=admin_keyboard(), parse_mode="HTML")
         context.user_data["admin_action"] = None
         return True
 
-    if action == "set_credits":
-        parts = text.split()
-        if len(parts) != 2:
-            await update.message.reply_text("\u274c Format: <code>user_id hours</code>", reply_markup=admin_keyboard(), parse_mode="HTML")
-            return True
-        try:
-            uid = int(parts[0])
-            hours = int(parts[1])
-        except ValueError:
-            await update.message.reply_text("\u274c Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
-            return True
-
-        # Set a fresh subscription (set_subscription extends from now if expired)
-        expiry = db.set_subscription(uid, hours)
-        try:
-            exp_dt = datetime.fromisoformat(expiry)
-            msg = f"\u2705 Set subscription for user <code>{uid}</code> to <b>{hours}h</b>.\nExpires: {exp_dt.strftime('%d %b %Y, %I:%M %p')}"
-        except:
-            msg = f"\u2705 Set subscription for user <code>{uid}</code> to <b>{hours}h</b>."
-        await update.message.reply_text(msg, reply_markup=admin_keyboard(), parse_mode="HTML")
-        context.user_data["admin_action"] = None
-        return True
-
-    if action == "reset_credits":
+    # Check User
+    if action == "check_user":
         try:
             uid = int(text)
         except ValueError:
-            await update.message.reply_text("\u274c Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
-            return True
-        # Expire the user's subscription by setting empty
-        conn = db.get_db()
-        c = conn.cursor()
-        c.execute("UPDATE users SET subscription_expiry = ? WHERE user_id = ?", ("", uid))
-        conn.commit()
-        conn.close()
-        await update.message.reply_text(
-            f"\u2705 Expired subscription for user <code>{uid}</code>.",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        context.user_data["admin_action"] = None
-        return True
-
-    if action == "ban_user":
-        try:
-            uid = int(text)
-        except ValueError:
-            await update.message.reply_text("\u274c Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
-            return True
-        db.ban_user(uid)
-        await update.message.reply_text(
-            f"\U0001f6ab User <code>{uid}</code> has been banned.",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        context.user_data["admin_action"] = None
-        return True
-
-    if action == "unban_user":
-        try:
-            uid = int(text)
-        except ValueError:
-            await update.message.reply_text("\u274c Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
-            return True
-        db.unban_user(uid)
-        await update.message.reply_text(
-            f"\u2705 User <code>{uid}</code> has been unbanned.",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        context.user_data["admin_action"] = None
-        return True
-
-    if action == "user_lookup":
-        try:
-            uid = int(text)
-        except ValueError:
-            await update.message.reply_text("\u274c Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
+            await update.message.reply_text("❌ Invalid user_id.", reply_markup=admin_keyboard(), parse_mode="HTML")
             return True
 
         db_user = db.get_or_create_user(uid)
         if not db_user:
-            await update.message.reply_text("\u274c User not found.", reply_markup=admin_keyboard())
+            await update.message.reply_text("❌ User not found.", reply_markup=admin_keyboard())
             context.user_data["admin_action"] = None
             return True
 
-        status = "\U0001f6ab Banned" if db_user["is_banned"] else "\u2705 Active"
-        sub_status = "\u2705 Active" if db.has_active_subscription(uid) else "\u26a0\ufe0f Expired/None"
+        status = "🚫 Banned" if db_user["is_banned"] else "✅ Active"
+        sub_status = "✅ Active" if db.has_active_subscription(uid) else "⚠️ Expired/None"
         sub_expiry = db.get_subscription_expiry(uid) or "N/A"
         text_msg = (
-            f"\U0001f464 <b>User Info</b>\n\n"
+            f"👤 <b>User Info</b>\n\n"
             f"<b>User ID:</b> <code>{db_user['user_id']}</code>\n"
             f"<b>Username:</b> @{db_user['username'] or 'N/A'}\n"
             f"<b>Name:</b> {db_user['first_name'] or 'N/A'}\n"
@@ -374,65 +204,59 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_action"] = None
         return True
 
-    if action == "broadcast":
-        if text.upper() != "YES":
-            await update.message.reply_text(
-                "\u274c Broadcast cancelled.",
-                reply_markup=admin_keyboard(), parse_mode="HTML",
-            )
-            context.user_data["admin_action"] = None
-            return True
+    # Create Code
+    if action == "create_code":
+        parts = text.split()
+        admin_id = update.effective_user.id
 
-        # Get the broadcast message from user_data
-        broadcast_msg = context.user_data.get("broadcast_message")
-        if not broadcast_msg:
-            await update.message.reply_text(
-                "\u274c No broadcast message found.",
-                reply_markup=admin_keyboard(), parse_mode="HTML",
-            )
-            context.user_data["admin_action"] = None
-            return True
-
-        users = db.get_all_users()
-        sent = 0
-        failed = 0
-        for u in users:
+        if len(parts) == 1:
+            # Single code: just hours
             try:
-                await context.bot.send_message(
-                    u["user_id"], broadcast_msg, parse_mode="HTML"
-                )
-                sent += 1
-            except Exception:
-                # Fallback: send as plain text if HTML parsing fails
-                try:
-                    await context.bot.send_message(
-                        u["user_id"], broadcast_msg
-                    )
-                    sent += 1
-                except Exception:
-                    failed += 1
+                hours = int(parts[0])
+            except ValueError:
+                await update.message.reply_text("❌ Invalid hours.", reply_markup=admin_keyboard(), parse_mode="HTML")
+                return True
+            code = db.generate_redeem_code(hours, admin_id)
+            await update.message.reply_text(
+                f"🎁 <b>Code Created!</b>\n\n"
+                f"Code: <code>{code}</code>\n"
+                f"Hours: {hours}\n\n"
+                f"Share this code with the user.",
+                reply_markup=admin_keyboard(), parse_mode="HTML"
+            )
+            context.user_data["admin_action"] = None
+            return True
 
-        await update.message.reply_text(
-            f"\U0001f4e2 <b>Broadcast Complete</b>\n\n"
-            f"\u2705 Sent: {sent}\n"
-            f"\u274c Failed: {failed}\n"
-            f"\U0001f465 Total: {len(users)}",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        context.user_data["admin_action"] = None
-        context.user_data.pop("broadcast_message", None)
-        return True
+        elif len(parts) == 2:
+            # Bulk: count hours
+            try:
+                count = int(parts[0])
+                hours = int(parts[1])
+            except ValueError:
+                await update.message.reply_text("❌ Invalid numbers.", reply_markup=admin_keyboard(), parse_mode="HTML")
+                return True
 
-    if action == "broadcast_confirm":
-        context.user_data["broadcast_message"] = text
-        context.user_data["admin_action"] = "broadcast"
-        await update.message.reply_text(
-            f"\U0001f4e2 <b>Broadcast Preview:</b>\n\n"
-            f"{text}\n\n"
-            f"\u26a0\ufe0f This will be sent to <b>{db.get_user_count()}</b> users.\n"
-            f"Type <b>YES</b> to confirm or <b>CANCEL</b> to abort.",
-            reply_markup=admin_keyboard(), parse_mode="HTML",
-        )
-        return True
+            if count > 50:
+                await update.message.reply_text("❌ Max 50 codes at once.", reply_markup=admin_keyboard(), parse_mode="HTML")
+                return True
+
+            codes = db.generate_bulk_codes(count, hours, admin_id)
+            codes_text = "\n".join([f"<code>{c}</code>" for c in codes])
+            await update.message.reply_text(
+                f"🎁 <b>{count} Codes Created!</b>\n\n"
+                f"Hours per code: {hours}\n\n"
+                f"Codes:\n{codes_text}\n\n"
+                f"Share these codes with users.",
+                reply_markup=admin_keyboard(), parse_mode="HTML"
+            )
+            context.user_data["admin_action"] = None
+            return True
+
+        else:
+            await update.message.reply_text(
+                "❌ Format: <code>count hours</code>\nOr just <code>hours</code>",
+                reply_markup=admin_keyboard(), parse_mode="HTML"
+            )
+            return True
 
     return False

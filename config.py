@@ -33,6 +33,12 @@ SUBSCRIPTION_PACKAGES = {
 # Free trial hours for new users (24 hours of free unlimited searches)
 FREE_TRIAL_HOURS = 0
 
+# Required Channels/Groups - users must join before using the bot
+REQUIRED_CHANNELS = [
+    "@hathixshadow",  # https://t.me/hathixshadow
+    "@suh_gf4u",       # https://t.me/suh_gf4u
+]
+
 # Database - use relative path for Railway compatibility
 DB_PATH = os.getenv("DB_PATH", "osint_bot.db")
 
