@@ -52,8 +52,9 @@ async def check_user_channels(user_id: int, bot) -> tuple[bool, list[str]]:
     Check if user has joined all required channels/groups.
     Returns (is_member, list of channel names user needs to join).
     
-    Fallback: If the bot is not an admin in the channel and can't check membership,
-    we assume the user is a member to avoid blocking them.
+    IMPORTANT: The bot MUST be an admin in the required channels to check membership.
+    If the bot is NOT an admin, get_chat_member will fail with BadRequest.
+    In this case, we allow the user through (assume they're a member) to avoid blocking everyone.
     """
     not_joined = []
     bot_cant_check = []
@@ -62,28 +63,31 @@ async def check_user_channels(user_id: int, bot) -> tuple[bool, list[str]]:
         try:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
             if member.status in ["creator", "administrator", "member", "restricted"]:
-                # 'restricted' can still mean member with some restrictions
+                # User is a member - continue
                 continue
-            else:
+            elif member.status == "left" or member.status == "kicked":
+                # User explicitly left or was kicked
                 not_joined.append(channel)
+            else:
+                # Unknown status - don't block
+                logger.warning(f"Unknown member status '{member.status}' for {channel}")
+                continue
         except BadRequest as e:
-            error_msg = str(e).lower()
-            # If bot is not in the channel, it can't check membership
-            if "not a member" in error_msg or "not enough rights" in error_msg or "chat not found" in error_msg:
-                logger.warning(f"Bot cannot check membership for {channel}: {e}. Assuming user is member.")
-                bot_cant_check.append(channel)
-                # Don't add to not_joined - we can't verify, so allow
-                continue
-            else:
-                logger.warning(f"BadRequest checking membership for {channel}: {e}")
-                not_joined.append(channel)
-        except Exception as e:
-            logger.error(f"Unexpected error checking {channel}: {e}")
-            # On unknown errors, don't block the user
+            # ANY BadRequest means bot can't check membership
+            # This usually happens when bot is not admin in the channel
+            # In this case, we MUST allow the user through
+            logger.warning(f"Bot cannot check membership for {channel}: {e}. Allowing user through.")
             bot_cant_check.append(channel)
+            continue
+        except Exception as e:
+            # On any other error, don't block the user
+            logger.error(f"Unexpected error checking {channel}: {e}. Allowing user through.")
+            bot_cant_check.append(channel)
+            continue
     
     if bot_cant_check:
-        logger.warning(f"Could not verify membership for channels: {bot_cant_check}. Bot may need to be added as admin.")
+        logger.warning(f"Could not verify membership for channels: {bot_cant_check}. "
+                       f"Bot must be added as admin to these channels for proper verification.")
     
     return (len(not_joined) == 0, not_joined)
 
