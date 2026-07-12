@@ -91,6 +91,69 @@ async def admin_create_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def admin_total_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 👥 Total Users button."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    stats = db.get_stats()
+    users = db.get_all_users()
+    
+    active_subs = 0
+    for u in users:
+        if db.has_active_subscription(u['user_id']):
+            active_subs += 1
+    
+    text = (
+        f"👥 <b>All Users ({stats['total_users']})</b>\n\n"
+        f"✅ <b>Active Subscriptions:</b> {active_subs}\n"
+        f"🔍 <b>Total Lookups:</b> {stats['total_lookups']}\n"
+        f"💰 <b>Revenue:</b> ₹{stats['total_revenue']}\n"
+        f"⏳ <b>Pending Payments:</b> {stats['pending_transactions']}\n\n"
+        "📋 <b>Recent Users:</b>\n"
+    )
+    
+    for u in users[:15]:
+        status = "🚫" if u['is_banned'] else "✅" if db.has_active_subscription(u['user_id']) else "⚠️"
+        name = u['first_name'] or 'N/A'
+        username = f"@{u['username']}" if u['username'] else 'N/A'
+        text += f"{status} <code>{u['user_id']}</code> | {name} ({username}) | {u['total_lookups']} lookups\n"
+    
+    if len(users) > 15:
+        text += f"\n... and {len(users) - 15} more users"
+    
+    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
+
+
+async def admin_lookup_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 🔍 Lookup History button - show all recent lookups."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    lookups = db.get_recent_lookups(limit=20)
+    
+    if not lookups:
+        await update.message.reply_text(
+            "🔍 <b>No lookups yet.</b>",
+            reply_markup=admin_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+    
+    text = f"🔍 <b>Recent Lookups ({len(lookups)})</b>\n\n"
+    
+    for lookup in lookups:
+        status = "✅" if lookup['success'] else "❌"
+        name = lookup['username'] or 'N/A'
+        text += (
+            f"{status} <code>{lookup['user_id']}</code> | "
+            f"📱 {name} | "
+            f"📅 {lookup['created_at'][:16]}\n"
+        )
+    
+    await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
+
+
 async def admin_view_codes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 📋 View All Codes button."""
     if not is_admin(update.effective_user.id):
@@ -137,6 +200,17 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return False
 
     text = update.message.text.strip()
+
+    # Admin panel buttons should NOT be processed as action input
+    admin_button_texts = (
+        "👥 Total Users", "🔍 Lookup History",
+        "✅ Activate Plan", "💳 Add Credits",
+        "👤 Check User", "🎁 Create Code",
+        "📋 View All Codes", "🏠 Main Menu",
+    )
+    if text in admin_button_texts:
+        context.user_data["admin_action"] = None
+        return False  # Let main.py route it normally
 
     # Back to admin panel
     if text in ("🏠 Main Menu", "⬅️ Back"):

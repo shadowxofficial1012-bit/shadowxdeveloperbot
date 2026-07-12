@@ -34,6 +34,8 @@ from admin import (
     admin_check_user,
     admin_create_code,
     admin_view_codes,
+    admin_total_users,
+    admin_lookup_history,
     handle_admin_text,
 )
 
@@ -89,6 +91,62 @@ async def handle_text(update: Update, context):
         await process_redeem_code(update, context)
         return
 
+    # Route by button text FIRST (before awaiting_number check)
+    # This prevents button presses from being treated as phone number input
+    if text == "📱 Phone Lookup":
+        # Clear any previous awaiting state
+        context.user_data.pop("awaiting_number", None)
+        await update.message.reply_text(
+            "🔍 <b>Enter Phone Number:</b>\n\n"
+            "Type the 10-digit phone number:\n"
+            "Example: <code>9876543210</code>\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_number"] = True
+        return
+
+    routes = {
+        "💰 Buy Plan": "buy",
+        "🎁 Redeem Code": "redeem",
+        "❓ Help Guide": "help",
+        "🤳 Contact Admin": "contact",
+        "🔧 Admin Panel": "admin",
+    }
+
+    if text in routes:
+        # Clear awaiting_number when other buttons are pressed
+        context.user_data.pop("awaiting_number", None)
+        route = routes[text]
+        if route == "buy":
+            await buy_plan(update, context)
+        elif route == "redeem":
+            await handle_redeem_code(update, context)
+        elif route == "help":
+            await help_command(update, context)
+        elif route == "contact":
+            await contact_admin(update, context)
+        elif route == "admin":
+            await admin_start(update, context)
+        return
+
+    # Admin panel buttons
+    admin_routes = {
+        "👥 Total Users": admin_total_users,
+        "🔍 Lookup History": admin_lookup_history,
+        "✅ Activate Plan": admin_activate_plan,
+        "💳 Add Credits": admin_add_credits,
+        "👤 Check User": admin_check_user,
+        "🎁 Create Code": admin_create_code,
+        "📋 View All Codes": admin_view_codes,
+        "🏠 Main Menu": admin_start,
+    }
+
+    if text in admin_routes and update.effective_user.id in ADMIN_IDS:
+        context.user_data.pop("awaiting_number", None)
+        await admin_routes[text](update, context)
+        return
+
     # Enforce channel join for non-admins on all user routes
     if update.effective_user.id not in ADMIN_IDS:
         is_member, not_joined = await check_user_channels(update.effective_user.id, context.bot)
@@ -107,46 +165,10 @@ async def handle_text(update: Update, context):
             )
             return
 
-    # Route by button text - Main Menu buttons
-    routes = {
-        "💰 Buy Plan": "buy",
-        "🎁 Redeem Code": "redeem",
-        "❓ Help Guide": "help",
-        "🤳 Contact Admin": "contact",
-        "🔧 Admin Panel": "admin",
-    }
-
-    if text in routes:
-        route = routes[text]
-        if route == "buy":
-            await buy_plan(update, context)
-        elif route == "redeem":
-            await handle_redeem_code(update, context)
-        elif route == "help":
-            await help_command(update, context)
-        elif route == "contact":
-            await contact_admin(update, context)
-        elif route == "admin":
-            await admin_start(update, context)
-        return
-
-    # Admin panel buttons
-    admin_routes = {
-        "✅ Activate Plan": admin_activate_plan,
-        "💳 Add Credits": admin_add_credits,
-        "👤 Check User": admin_check_user,
-        "🎁 Create Code": admin_create_code,
-        "📋 View All Codes": admin_view_codes,
-        "🏠 Main Menu": admin_start,
-    }
-
-    if text in admin_routes and update.effective_user.id in ADMIN_IDS:
-        await admin_routes[text](update, context)
-        return
-
-    # If awaiting number for lookup
+    # If awaiting number for lookup - NOW process it (after button routing)
     if context.user_data.get("awaiting_number"):
         context.user_data.pop("awaiting_number", None)
+        # Channel check happens inside handle_lookup
         await handle_lookup(update, context)
         return
 

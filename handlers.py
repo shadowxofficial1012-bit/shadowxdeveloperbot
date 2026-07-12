@@ -51,39 +51,41 @@ async def check_user_channels(user_id: int, bot) -> tuple[bool, list[str]]:
     """
     Check if user has joined all required channels/groups.
     Returns (is_member, list of channel names user needs to join).
+    
+    Fallback: If the bot is not an admin in the channel and can't check membership,
+    we assume the user is a member to avoid blocking them.
     """
     not_joined = []
+    bot_cant_check = []
+    
     for channel in REQUIRED_CHANNELS:
         try:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
-            if member.status in ["creator", "administrator", "member"]:
+            if member.status in ["creator", "administrator", "member", "restricted"]:
+                # 'restricted' can still mean member with some restrictions
                 continue
             else:
                 not_joined.append(channel)
         except BadRequest as e:
-            logger.warning(f"Failed to check membership for {channel}: {e}")
-            not_joined.append(channel)
+            error_msg = str(e).lower()
+            # If bot is not in the channel, it can't check membership
+            if "not a member" in error_msg or "not enough rights" in error_msg or "chat not found" in error_msg:
+                logger.warning(f"Bot cannot check membership for {channel}: {e}. Assuming user is member.")
+                bot_cant_check.append(channel)
+                # Don't add to not_joined - we can't verify, so allow
+                continue
+            else:
+                logger.warning(f"BadRequest checking membership for {channel}: {e}")
+                not_joined.append(channel)
         except Exception as e:
             logger.error(f"Unexpected error checking {channel}: {e}")
-            not_joined.append(channel)
+            # On unknown errors, don't block the user
+            bot_cant_check.append(channel)
+    
+    if bot_cant_check:
+        logger.warning(f"Could not verify membership for channels: {bot_cant_check}. Bot may need to be added as admin.")
+    
     return (len(not_joined) == 0, not_joined)
-
-
-async def show_join_required(chat_id, bot, parse_mode="HTML"):
-    """Show the channel join required message."""
-    channels_text = "\n".join([f"• {ch}" for ch in REQUIRED_CHANNELS])
-    text = (
-        "🔴 <b>Join Required Channels!</b>\n\n"
-        "You must join the following channels before using this bot:\n\n"
-        f"{channels_text}\n\n"
-        "After joining, tap the button below to verify."
-    )
-    await bot.send_message(
-        chat_id,
-        text,
-        reply_markup=required_channels_keyboard(),
-        parse_mode=parse_mode,
-    )
 
 
 # Max Telegram message length

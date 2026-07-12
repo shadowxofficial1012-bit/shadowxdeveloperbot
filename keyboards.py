@@ -20,12 +20,10 @@ def main_menu_keyboard():
 def admin_keyboard():
     """Admin panel reply keyboard matching the screenshot design."""
     keyboard = [
-        [KeyboardButton("✅ Activate Plan")],
-        [KeyboardButton("💳 Add Credits")],
-        [KeyboardButton("👤 Check User")],
-        [KeyboardButton("🎁 Create Code")],
-        [KeyboardButton("📋 View All Codes")],
-        [KeyboardButton("🏠 Main Menu")],
+        [KeyboardButton("👥 Total Users"), KeyboardButton("🔍 Lookup History")],
+        [KeyboardButton("✅ Activate Plan"), KeyboardButton("💳 Add Credits")],
+        [KeyboardButton("👤 Check User"), KeyboardButton("🎁 Create Code")],
+        [KeyboardButton("📋 View All Codes"), KeyboardButton("🏠 Main Menu")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
