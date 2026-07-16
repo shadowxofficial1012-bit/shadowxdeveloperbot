@@ -522,6 +522,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all inline button callbacks."""
     query = update.callback_query
     data = query.data
+
+    # Only respond in private chats (DMs)
+    if update.effective_chat.type != "private":
+        await query.answer()
+        return
+
     await query.answer()
 
     user = query.from_user

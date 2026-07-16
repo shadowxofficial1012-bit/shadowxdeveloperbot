@@ -290,8 +290,10 @@ def main():
     app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
     app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
 
-    # Callback handler (inline buttons) - DM only
-    app.add_handler(CallbackQueryHandler(handle_callback, filters=private_filter))
+    # Callback handler (inline buttons)
+    # Note: CallbackQueryHandler in v21.0 does not support `filters`.
+    # Private-chat filtering is done inside handle_callback itself.
+    app.add_handler(CallbackQueryHandler(handle_callback))
 
     # Text message handler (DM only)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, handle_text))
