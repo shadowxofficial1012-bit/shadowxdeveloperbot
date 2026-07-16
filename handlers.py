@@ -1106,28 +1106,53 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    result_leak = await api_client.lookup_numleak(phone_number, timeout=10)
+    # Call BOTH endpoints in parallel for complete data:
+    # /api/number  -> detailed records (name, address, SIM, etc.)
+    # /api/numleak -> breach/leak data + calltracer
+    result_number, result_leak = await asyncio.gather(
+        api_client.lookup_number(phone_number, timeout=10),
+        api_client.lookup_numleak(phone_number, timeout=10),
+        return_exceptions=True,
+    )
 
-    logger.info(f"Numleak API: success={result_leak['success']}, error={result_leak.get('error')}")
+    # Handle exceptions from gather (return_exceptions=True wraps them)
+    if isinstance(result_number, Exception):
+        logger.error(f"Number API exception: {result_number}")
+        result_number = {"success": False, "error": str(result_number)}
+    if isinstance(result_leak, Exception):
+        logger.error(f"Numleak API exception: {result_leak}")
+        result_leak = {"success": False, "error": str(result_leak)}
 
-    if not result_leak["success"]:
-        err_leak = result_leak.get('error', 'Unknown')
-        await loading_msg.edit_text(
-            f"❌ <b>Lookup Failed</b>\n\n"
-            f"Error: {err_leak}\n\n"
-            "Please try again later or contact @HATHI02.",
-            parse_mode="HTML",
-        )
-        return
+    logger.info(f"Number API: success={result_number.get('success')}, error={result_number.get('error')}")
+    logger.info(f"Numleak API: success={result_leak.get('success')}, error={result_leak.get('error')}")
 
-    numleak_data_raw = result_leak.get("data", {})
+    # Extract raw data from both endpoints
+    number_data_raw = result_number.get("data", {}) if result_number.get("success") else {}
+    numleak_data_raw = result_leak.get("data", {}) if result_leak.get("success") else {}
+
+    # Handle nested response formats: {"data": {"results": [...]}} or {"results": [...]
+    if not number_data_raw.get("results") and number_data_raw.get("data"):
+        nested = number_data_raw["data"]
+        if isinstance(nested, dict) and nested.get("results"):
+            number_data_raw = nested  # unwrap nested data
+
+    # Check if we got ANY useful data from either endpoint
+    has_number_data = bool(number_data_raw.get("results"))
     has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
 
-    logger.info(f"Data check: has_leak_data={has_leak_data}")
+    logger.info(f"Data check: has_number_data={has_number_data}, has_leak_data={has_leak_data}")
 
-    if not has_leak_data:
+    if not has_number_data and not has_leak_data:
+        # Both endpoints failed or returned no data
+        err_msgs = []
+        if not result_number.get("success"):
+            err_msgs.append(f"Number API: {result_number.get('error', 'no data')}")
+        if not result_leak.get("success"):
+            err_msgs.append(f"Numleak API: {result_leak.get('error', 'no data')}")
+        err_detail = " | ".join(err_msgs) if err_msgs else "Unknown"
         await loading_msg.edit_text(
             f"❌ <b>No data found</b> for <code>{phone_number}</code>.\n\n"
+            f"Error: {err_detail}\n\n"
             "The number may not exist in the database or the API is rate limited.",
             parse_mode="HTML",
         )
@@ -1140,7 +1165,9 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     combined_data = {
         "number": phone_number,
+        "number_data": number_data_raw,
         "numleak_data": numleak_data_raw,
+        "lookup_type": "numleak",
     }
 
     db.log_lookup(user.id, phone_number, True)
@@ -1151,9 +1178,9 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    from pdf_exporter import generate_numleak_text_report, generate_numleak_pdf
+    from pdf_exporter import generate_text_report, generate_osint_pdf
     
-    text_report = generate_numleak_text_report(combined_data)
+    text_report = generate_text_report(combined_data)
     code_block = f"<pre>{text_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
@@ -1175,7 +1202,7 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     try:
-        pdf_buffer = generate_numleak_pdf(combined_data)
+        pdf_buffer = generate_osint_pdf(combined_data)
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
             document=pdf_buffer,

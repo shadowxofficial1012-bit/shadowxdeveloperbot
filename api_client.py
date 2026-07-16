@@ -1,8 +1,6 @@
 import logging
-import json
 import asyncio
-from urllib.parse import urlencode
-from config import OSINT_API_NUMLEAK_URL, OSINT_API_NUMTOUPI_URL, OSINT_API_VEHICLE_URL, OSINT_API_KEY, API_RELAY_URL
+from config import OSINT_API_NUMBER_URL, OSINT_API_NUMLEAK_URL, OSINT_API_NUMTOUPI_URL, OSINT_API_VEHICLE_URL, OSINT_API_KEY, API_RELAY_URL
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +87,12 @@ def _fetch_requests(url: str, params: dict, timeout: int = 30) -> dict:
 async def _fetch_fast(url: str, params: dict, timeout: int = 8) -> dict:
     """Fetch data using curl_cffi (fastest method, bypasses TLS fingerprinting)."""
     return await asyncio.to_thread(_fetch_cffi, url, params, timeout=timeout)
+
+
+async def lookup_number(number: str, timeout: int = 8) -> dict:
+    """Fetch phone number details (name, address, SIM etc) from the /api/number endpoint."""
+    params = {"key": OSINT_API_KEY, "num": number}
+    return await _fetch_fast(OSINT_API_NUMBER_URL, params, timeout=timeout)
 
 
 async def lookup_numleak(number: str, timeout: int = 8) -> dict:
