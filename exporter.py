@@ -127,34 +127,44 @@ def _calculate_height(data: dict) -> int:
     height += 60  # Title
     height += 20  # Spacer
 
-    # Phone number info section
-    height += 40
-    height += 30 * 4
-    height += 20
+    lookup_type = data.get("lookup_type", "numleak")
 
-    # Records section (number data)
-    number_data = data.get("number_data", {})
-    results = number_data.get("results", [])
-    if results:
-        height += 40
-        height += 30 * min(len(results), 3) * 7  # ~7 fields per record
-        height += 20
-
-    # Leak data section
-    numleak_data = data.get("numleak_data", {})
-    chain = numleak_data.get("chain", {})
-    records = chain.get("records", [])
-    if records:
-        height += 40
-        height += 30 * min(len(records), 3) * 6
-        height += 20
-
-    # SIM info section
-    calltracer = numleak_data.get("calltracer", {})
-    if calltracer:
-        height += 40
-        height += 30 * 6
-        height += 20
+    if lookup_type == "vehicle":
+        vehicle_data = data.get("vehicle_data", {})
+        height += 40  # Target section
+        height += 30 * 8  # Owner + vehicle fields
+        height += 40  # Insurance section
+        height += 30 * 4
+        height += 40  # Technical section
+        height += 30 * 4
+    elif lookup_type in ("upi", "numtoupi"):
+        upi_data = data.get("upi_data", {})
+        height += 40  # Target section
+        height += 30 * 6  # Top-level fields
+        accounts = upi_data.get("accounts", [])
+        if accounts:
+            height += 40
+            height += 30 * min(len(accounts), 5) * 4
+        transactions = upi_data.get("transactions", [])
+        if transactions:
+            height += 40
+            height += 30 * min(len(transactions), 5) * 4
+    else:
+        # numleak format (default)
+        numleak_data = data.get("numleak_data", {})
+        height += 40  # Phone number info section
+        height += 30 * 4
+        chain = numleak_data.get("chain", {})
+        records = chain.get("records", [])
+        if records:
+            height += 40
+            height += 30 * min(len(records), 3) * 6
+            height += 20
+        calltracer = numleak_data.get("calltracer", {})
+        if calltracer:
+            height += 40
+            height += 30 * 6
+            height += 20
 
     # Footer + Watermark
     height += 40
@@ -163,19 +173,245 @@ def _calculate_height(data: dict) -> int:
     return max(height, 600)
 
 
+def _render_numleak_section(draw, data, y, font_section, font_label, font_value, font_small):
+    """Render numleak data on the image. Returns updated y."""
+    numleak_data = data.get("numleak_data", {})
+    chain = numleak_data.get("chain", {})
+    calltracer = numleak_data.get("calltracer", {})
+
+    if chain:
+        y = _draw_section_header(draw, y, "DATA LEAK DETAILS", font_section)
+        leak_fields = [
+            ("Title", _safe(chain.get("title"))),
+            ("Info", _safe(chain.get("description", ""))[:60]),
+        ]
+        for label, value in leak_fields:
+            draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
+            draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_PRIMARY)
+            y += 28
+        y += 10
+
+        leak_records = chain.get("records", [])
+        if leak_records:
+            for i, record in enumerate(leak_records[:3], 1):
+                y += 4
+                draw.text((PADDING + 10, y), f"--- Leak Record #{i} ---", font=font_label, fill=TEXT_WARN)
+                y += 24
+                for label, key in [("Name", "FullName"), ("Father", "FatherName"),
+                                   ("Phone", "Phone"), ("Phone 2", "Phone2"),
+                                   ("Doc ID", "DocumentNumber"), ("Address", "Adres"),
+                                   ("Region", "Region")]:
+                    value = record.get(key)
+                    if value:
+                        val_str = str(value)[:50]
+                        draw.text((PADDING + 20, y), f"{label}:", font=font_small, fill=TEXT_SECONDARY)
+                        draw.text((PADDING + 120, y), val_str, font=font_small, fill=TEXT_PRIMARY)
+                        y += 20
+            if len(leak_records) > 3:
+                draw.text((PADDING + 10, y), f"... and {len(leak_records) - 3} more records",
+                           font=font_small, fill=TEXT_SECONDARY)
+                y += 24
+        y += 10
+        y = _draw_divider(draw, y)
+
+    if calltracer:
+        y = _draw_section_header(draw, y, "SIM & DEVICE INFO", font_section)
+        for label, key in [("SIM Card", "SIM card"), ("State", "Mobile State"),
+                           ("Connection", "Connection"), ("Hometown", "Hometown"),
+                           ("Language", "Language"), ("IMEI", "IMEI number")]:
+            value = calltracer.get(key)
+            if value:
+                draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 28
+        y += 10
+        y = _draw_divider(draw, y)
+
+    return y
+
+
+def _render_upi_section(draw, data, y, font_section, font_label, font_value, font_small):
+    """Render UPI data on the image. Returns updated y."""
+    upi_data = data.get("upi_data", {})
+
+    y = _draw_section_header(draw, y, "UPI DETAILS", font_section)
+
+    # Top-level fields
+    for key, value in upi_data.items():
+        if key in ("accounts", "transactions", "data"):
+            continue
+        if isinstance(value, (dict, list)):
+            continue
+        draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                   font=font_label, fill=TEXT_SECONDARY)
+        draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+        y += 26
+
+    # Nested data fields
+    nested = upi_data.get("data", {})
+    if isinstance(nested, dict):
+        for key, value in nested.items():
+            if key in ("accounts", "transactions"):
+                continue
+            if isinstance(value, (dict, list)):
+                continue
+            draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                       font=font_label, fill=TEXT_SECONDARY)
+            draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+            y += 26
+    y += 10
+    y = _draw_divider(draw, y)
+
+    # Accounts
+    accounts = upi_data.get("accounts", [])
+    if accounts:
+        y = _draw_section_header(draw, y, f"LINKED UPI ACCOUNTS ({len(accounts)})", font_section)
+        for i, acc in enumerate(accounts[:5], 1):
+            y += 4
+            draw.text((PADDING + 10, y), f"--- Account #{i} ---", font=font_label, fill=TEXT_WARN)
+            y += 24
+            if isinstance(acc, dict):
+                for key, value in acc.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    draw.text((PADDING + 20, y), f"{key.replace('_', ' ').title()}:",
+                               font=font_small, fill=TEXT_SECONDARY)
+                    draw.text((PADDING + 160, y), str(value)[:50], font=font_small, fill=TEXT_PRIMARY)
+                    y += 20
+            else:
+                draw.text((PADDING + 20, y), f"UPI ID: {str(acc)[:50]}",
+                           font=font_small, fill=TEXT_PRIMARY)
+                y += 20
+        y += 10
+        y = _draw_divider(draw, y)
+
+    # Transactions
+    transactions = upi_data.get("transactions", [])
+    if transactions:
+        y = _draw_section_header(draw, y, f"TRANSACTION HISTORY ({len(transactions)})", font_section)
+        for i, tx in enumerate(transactions[:5], 1):
+            y += 4
+            draw.text((PADDING + 10, y), f"--- TX #{i} ---", font=font_label, fill=TEXT_WARN)
+            y += 24
+            if isinstance(tx, dict):
+                for key, value in tx.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    draw.text((PADDING + 20, y), f"{key.replace('_', ' ').title()}:",
+                               font=font_small, fill=TEXT_SECONDARY)
+                    draw.text((PADDING + 160, y), str(value)[:50], font=font_small, fill=TEXT_PRIMARY)
+                    y += 20
+            else:
+                draw.text((PADDING + 20, y), f"TXN: {str(tx)[:50]}",
+                           font=font_small, fill=TEXT_PRIMARY)
+                y += 20
+        y += 10
+        y = _draw_divider(draw, y)
+
+    return y
+
+
+def _render_vehicle_section(draw, data, y, font_section, font_label, font_value, font_small):
+    """Render vehicle data on the image. Returns updated y."""
+    vehicle_data = data.get("vehicle_data", {})
+
+    owner = vehicle_data.get("owner", {})
+    vehicle = vehicle_data.get("vehicle", {})
+    insurance = vehicle_data.get("insurance", {})
+    technical = vehicle_data.get("technical", {})
+
+    # Flat response fallback
+    if not owner and not vehicle:
+        owner = {
+            "name": vehicle_data.get("owner_name") or vehicle_data.get("name"),
+            "father_name": vehicle_data.get("father_name"),
+            "address": vehicle_data.get("owner_address") or vehicle_data.get("address"),
+        }
+        vehicle = {
+            "registration_number": vehicle_data.get("registration_number"),
+            "maker": vehicle_data.get("maker"),
+            "model": vehicle_data.get("model"),
+            "color": vehicle_data.get("color"),
+            "fuel_type": vehicle_data.get("fuel_type"),
+        }
+
+    if owner and isinstance(owner, dict) and any(v for v in owner.values() if v):
+        y = _draw_section_header(draw, y, "OWNER DETAILS", font_section)
+        for key, value in owner.items():
+            if value:
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 26
+        y += 10
+        y = _draw_divider(draw, y)
+
+    if vehicle and isinstance(vehicle, dict) and any(v for v in vehicle.values() if v):
+        y = _draw_section_header(draw, y, "VEHICLE DETAILS", font_section)
+        for key, value in vehicle.items():
+            if value:
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 26
+        y += 10
+        y = _draw_divider(draw, y)
+
+    if insurance and isinstance(insurance, dict) and any(v for v in insurance.values() if v):
+        y = _draw_section_header(draw, y, "INSURANCE DETAILS", font_section)
+        for key, value in insurance.items():
+            if value:
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 26
+        y += 10
+        y = _draw_divider(draw, y)
+
+    if technical and isinstance(technical, dict) and any(v for v in technical.values() if v):
+        y = _draw_section_header(draw, y, "TECHNICAL DETAILS", font_section)
+        for key, value in technical.items():
+            if value:
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 26
+        y += 10
+        y = _draw_divider(draw, y)
+
+    # Fallback: print all keys
+    if not owner and not vehicle and not insurance and not technical:
+        y = _draw_section_header(draw, y, "VEHICLE DATA", font_section)
+        for key, value in vehicle_data.items():
+            if isinstance(value, dict):
+                for k2, v2 in value.items():
+                    draw.text((PADDING + 10, y), f"{k2.replace('_', ' ').title()}:",
+                               font=font_label, fill=TEXT_SECONDARY)
+                    draw.text((PADDING + 180, y), str(v2)[:50], font=font_value, fill=TEXT_PRIMARY)
+                    y += 24
+            elif isinstance(value, list):
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), f"({len(value)} items)",
+                           font=font_value, fill=TEXT_PRIMARY)
+                y += 24
+            else:
+                draw.text((PADDING + 10, y), f"{key.replace('_', ' ').title()}:",
+                           font=font_label, fill=TEXT_SECONDARY)
+                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
+                y += 24
+        y += 10
+
+    return y
+
+
 def generate_report_image(data: dict) -> io.BytesIO:
     """
-    Generate a styled PNG image of the Phone Number OSINT report.
-
-    Args:
-        data: Combined data dict with number_data and numleak_data.
-
-    Returns:
-        io.BytesIO object containing the PNG image.
+    Generate a styled PNG image of the OSINT report.
+    Supports numleak, UPI, and vehicle lookup types.
     """
-    number = data.get("number", "N/A")
-    number_data = data.get("number_data", {})
-    numleak_data = data.get("numleak_data", {})
+    number = data.get("number", data.get("vehicle_plate", "N/A"))
+    lookup_type = data.get("lookup_type", "numleak")
 
     img_height = _calculate_height(data)
 
@@ -192,7 +428,6 @@ def generate_report_image(data: dict) -> io.BytesIO:
     y = PADDING
 
     # === HEADER with optional logo ===
-    logo_loaded = False
     if os.path.exists(LOGO_PATH):
         try:
             logo = Image.open(LOGO_PATH).convert("RGBA")
@@ -202,153 +437,46 @@ def generate_report_image(data: dict) -> io.BytesIO:
             logo = logo.resize((new_w, new_h), Image.LANCZOS)
             logo_x = IMG_WIDTH - PADDING - new_w
             img.paste(logo, (logo_x, y), logo)
-            logo_loaded = True
         except Exception:
             pass
 
-    title = "PHONE NUMBER OSINT REPORT"
+    # Dynamic title based on lookup type
+    titles = {
+        "vehicle": "VEHICLE REGISTRATION REPORT",
+        "upi": "UPI INTELLIGENCE REPORT",
+        "numtoupi": "UPI INTELLIGENCE REPORT",
+        "numleak": "DATA LEAK INTELLIGENCE REPORT",
+    }
+    title = titles.get(lookup_type, "PHONE NUMBER OSINT REPORT")
     draw.text((PADDING, y), title, font=font_title, fill=TEXT_ACCENT)
     bbox = draw.textbbox((0, 0), title, font=font_title)
     y += bbox[3] - bbox[1] + 8
 
-    subtitle = f"Target: {number}"
+    target_label = "Plate" if lookup_type == "vehicle" else "Target"
+    subtitle = f"{target_label}: {number}"
     draw.text((PADDING, y), subtitle, font=font_value, fill=TEXT_SECONDARY)
     y += 30
 
     y = _draw_divider(draw, y)
 
-    # === PHONE NUMBER INFO SECTION ===
-    y = _draw_section_header(draw, y, "PHONE NUMBER INFO", font_section)
-
-    total = number_data.get("total", 0)
-    results = number_data.get("results", [])
-
-    info_fields = [
-        ("Number", number),
-        ("Total Records", _format_number(total)),
-        ("Status", "DATA FOUND" if results else "NO DATA"),
-    ]
-
-    for label, value in info_fields:
-        draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
-        draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_PRIMARY)
-        y += 28
-
+    # === TARGET INFO ===
+    y = _draw_section_header(draw, y, "TARGET INFO", font_section)
+    draw.text((PADDING + 10, y), f"{target_label}:", font=font_label, fill=TEXT_SECONDARY)
+    draw.text((PADDING + 180, y), number, font=font_value, fill=TEXT_PRIMARY)
+    y += 28
+    draw.text((PADDING + 10, y), "Type:", font=font_label, fill=TEXT_SECONDARY)
+    draw.text((PADDING + 180, y), lookup_type.upper(), font=font_value, fill=TEXT_PRIMARY)
+    y += 28
     y += 10
     y = _draw_divider(draw, y)
 
-    # === RECORD DETAILS SECTION ===
-    if results:
-        y = _draw_section_header(draw, y, "RECORD DETAILS", font_section)
-
-        for i, record in enumerate(results[:3], 1):
-            y += 4
-            draw.text((PADDING + 10, y), f"--- Record #{i} ---", font=font_label, fill=TEXT_WARN)
-            y += 24
-
-            record_fields = [
-                ("Name", record.get("name")),
-                ("Mobile", record.get("mobile")),
-                ("Father", record.get("fname")),
-                ("Address", str(record.get("address", ""))[:60]),
-                ("Circle", record.get("circle")),
-                ("Email", record.get("email")),
-                ("Alt Num", record.get("alt")),
-            ]
-
-            for label, value in record_fields:
-                if value and value != "N/A":
-                    val_str = str(value)[:50]
-                    draw.text((PADDING + 20, y), f"{label}:", font=font_small, fill=TEXT_SECONDARY)
-                    draw.text((PADDING + 120, y), val_str, font=font_small, fill=TEXT_PRIMARY)
-                    y += 20
-
-        if len(results) > 3:
-            draw.text(
-                (PADDING + 10, y),
-                f"... and {len(results) - 3} more records",
-                font=font_small, fill=TEXT_SECONDARY
-            )
-            y += 24
-
-        y += 10
-        y = _draw_divider(draw, y)
-
-    # === LEAK DATA SECTION ===
-    chain = numleak_data.get("chain", {})
-    leak_records = chain.get("records", [])
-
-    if chain:
-        y = _draw_section_header(draw, y, "DATA LEAK DETAILS", font_section)
-
-        leak_fields = [
-            ("Title", _safe(chain.get("title"))),
-            ("Info", _safe(chain.get("description", ""))[:60]),
-        ]
-
-        for label, value in leak_fields:
-            draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
-            draw.text((PADDING + 180, y), value, font=font_value, fill=TEXT_PRIMARY)
-            y += 28
-
-        y += 10
-
-        if leak_records:
-            for i, record in enumerate(leak_records[:3], 1):
-                y += 4
-                draw.text((PADDING + 10, y), f"--- Leak Record #{i} ---", font=font_label, fill=TEXT_WARN)
-                y += 24
-
-                leak_record_fields = [
-                    ("Name", record.get("FullName")),
-                    ("Father", record.get("FatherName")),
-                    ("Phone", record.get("Phone")),
-                    ("Phone 2", record.get("Phone2")),
-                    ("Doc ID", record.get("DocumentNumber")),
-                    ("Address", str(record.get("Adres", ""))[:60]),
-                    ("Region", record.get("Region")),
-                ]
-
-                for label, value in leak_record_fields:
-                    if value:
-                        val_str = str(value)[:50]
-                        draw.text((PADDING + 20, y), f"{label}:", font=font_small, fill=TEXT_SECONDARY)
-                        draw.text((PADDING + 120, y), val_str, font=font_small, fill=TEXT_PRIMARY)
-                        y += 20
-
-            if len(leak_records) > 3:
-                draw.text(
-                    (PADDING + 10, y),
-                    f"... and {len(leak_records) - 3} more records",
-                    font=font_small, fill=TEXT_SECONDARY
-                )
-                y += 24
-
-        y += 10
-        y = _draw_divider(draw, y)
-
-    # === SIM & DEVICE INFO ===
-    calltracer = numleak_data.get("calltracer", {})
-    if calltracer:
-        y = _draw_section_header(draw, y, "SIM & DEVICE INFO", font_section)
-
-        sim_fields = [
-            ("SIM Card", calltracer.get("SIM card")),
-            ("State", calltracer.get("Mobile State")),
-            ("Connection", calltracer.get("Connection")),
-            ("Hometown", calltracer.get("Hometown")),
-            ("Language", calltracer.get("Language")),
-            ("IMEI", calltracer.get("IMEI number")),
-        ]
-
-        for label, value in sim_fields:
-            if value:
-                draw.text((PADDING + 10, y), f"{label}:", font=font_label, fill=TEXT_SECONDARY)
-                draw.text((PADDING + 180, y), str(value)[:50], font=font_value, fill=TEXT_PRIMARY)
-                y += 28
-
-        y += 10
-        y = _draw_divider(draw, y)
+    # === LOOKUP TYPE SPECIFIC SECTIONS ===
+    if lookup_type == "vehicle":
+        y = _render_vehicle_section(draw, data, y, font_section, font_label, font_value, font_small)
+    elif lookup_type in ("upi", "numtoupi"):
+        y = _render_upi_section(draw, data, y, font_section, font_label, font_value, font_small)
+    else:
+        y = _render_numleak_section(draw, data, y, font_section, font_label, font_value, font_small)
 
     # === FOOTER ===
     y += 10

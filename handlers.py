@@ -765,8 +765,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Image export failed: {e}")
 
         try:
-            from pdf_exporter import generate_osint_pdf
-            pdf_buffer = generate_osint_pdf(lookup_data)
+            from pdf_exporter import generate_numleak_pdf, generate_upi_pdf, generate_vehicle_pdf
+            lookup_type = lookup_data.get("lookup_type", "numleak")
+            if lookup_type == "upi":
+                pdf_buffer = generate_upi_pdf(lookup_data)
+            elif lookup_type == "vehicle":
+                pdf_buffer = generate_vehicle_pdf(lookup_data)
+            else:
+                pdf_buffer = generate_numleak_pdf(lookup_data)
             await context.bot.send_document(
                 chat_id=query.message.chat.id,
                 document=pdf_buffer,
@@ -844,26 +850,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a demo result so users can see how output looks."""
-    from pdf_exporter import generate_text_report, generate_osint_pdf
+    from pdf_exporter import generate_numleak_text_report, generate_numleak_pdf
     
     demo_data = {
         "number": "9876543210",
-        "number_data": {
-            "results": [{
-                "name": "Rahul Kumar",
-                "fname": "Suresh Kumar",
-                "mobile": "9876543210",
-                "alt": "9123456789",
-                "email": "N/A",
-                "circle": "DELHI NCR",
-                "address": "123 MG Road, Connaught Place, New Delhi, Delhi 110001",
-                "id": "DEMO12345"
-            }],
-            "total": 1,
-            "by": "@ftgamer2",
-            "channel": "https://t.me/lynx_api"
-        },
         "numleak_data": {
+            "chain": {
+                "title": "Indian Mobile Number Database Leak",
+                "description": "Leaked database containing mobile number registration details",
+                "records": [{
+                    "FullName": "Rahul Kumar",
+                    "FatherName": "Suresh Kumar",
+                    "Phone": "9876543210",
+                    "Phone2": "9123456789",
+                    "DocumentNumber": "DEMO12345",
+                    "Adres": "123 MG Road, Connaught Place, New Delhi, Delhi 110001",
+                    "Region": "Delhi NCR"
+                }]
+            },
             "calltracer": {
                 "Number": "+91-9876543210",
                 "SIM card": "Jio (Reliance Jio Infocomm Limited)",
@@ -877,14 +881,14 @@ async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     }
     
-    text_report = generate_text_report(demo_data)
+    text_report = generate_numleak_text_report(demo_data)
     await update.message.reply_text(
         f"<pre>{text_report}</pre>",
         parse_mode="HTML",
     )
     
     try:
-        pdf_buffer = generate_osint_pdf(demo_data)
+        pdf_buffer = generate_numleak_pdf(demo_data)
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
             document=pdf_buffer,
@@ -976,43 +980,28 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    result_num, result_leak = await asyncio.gather(
-        api_client.lookup_number(phone_number),
-        api_client.lookup_numleak(phone_number),
-    )
+    result_leak = await api_client.lookup_numleak(phone_number, timeout=10)
 
-    logger.info(f"Number API: success={result_num['success']}, error={result_num.get('error')}")
     logger.info(f"Numleak API: success={result_leak['success']}, error={result_leak.get('error')}")
 
-    if not result_num["success"] and not result_leak["success"]:
-        err_num = result_num.get('error', 'Unknown')
+    if not result_leak["success"]:
         err_leak = result_leak.get('error', 'Unknown')
         await loading_msg.edit_text(
             f"❌ <b>Lookup Failed</b>\n\n"
-            f"Number API: {err_num}\n"
-            f"Numleak API: {err_leak}\n\n"
+            f"Error: {err_leak}\n\n"
             "Please try again later or contact @HATHI02.",
             parse_mode="HTML",
         )
         return
 
-    num_data = result_num.get("data", {}) if result_num["success"] else {}
-    numleak_data_raw = result_leak.get("data", {}) if result_leak["success"] else {}
-    has_num_data = bool(num_data.get("results"))
+    numleak_data_raw = result_leak.get("data", {})
     has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
 
-    logger.info(f"Data check: has_num_data={has_num_data}, has_leak_data={has_leak_data}")
+    logger.info(f"Data check: has_leak_data={has_leak_data}")
 
-    if not has_num_data and not has_leak_data:
-        details = []
-        if result_num["success"] and num_data:
-            details.append(f"Number API: got response with keys {list(num_data.keys())}")
-        if result_leak["success"] and numleak_data_raw:
-            details.append(f"Numleak API: got response with keys {list(numleak_data_raw.keys())}")
-        detail_str = "\n".join(details) if details else "APIs returned empty data."
+    if not has_leak_data:
         await loading_msg.edit_text(
             f"❌ <b>No data found</b> for <code>{phone_number}</code>.\n\n"
-            f"{detail_str}\n\n"
             "The number may not exist in the database or the API is rate limited.",
             parse_mode="HTML",
         )
@@ -1025,8 +1014,7 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     combined_data = {
         "number": phone_number,
-        "number_data": result_num.get("data", {}),
-        "numleak_data": result_leak.get("data", {}),
+        "numleak_data": numleak_data_raw,
     }
 
     db.log_lookup(user.id, phone_number, True)
@@ -1037,9 +1025,9 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    from pdf_exporter import generate_text_report, generate_osint_pdf
+    from pdf_exporter import generate_numleak_text_report, generate_numleak_pdf
     
-    text_report = generate_text_report(combined_data)
+    text_report = generate_numleak_text_report(combined_data)
     code_block = f"<pre>{text_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
@@ -1061,7 +1049,7 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     try:
-        pdf_buffer = generate_osint_pdf(combined_data)
+        pdf_buffer = generate_numleak_pdf(combined_data)
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
             document=pdf_buffer,
@@ -1091,6 +1079,585 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📥 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
         reply_markup=export_keyboard(phone_number),
+        parse_mode="HTML",
+    )
+
+
+async def handle_num_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /num command - Mobile number leak details lookup."""
+    user = update.effective_user
+    is_admin_user = user.id in ADMIN_IDS
+
+    # Enforce channel join for non-admins
+    if not is_admin_user:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+
+    if db.is_banned(user.id):
+        await update.message.reply_text(
+            "🚫 You are <b>banned</b> from using this bot.\nContact admin for support.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        if not db.has_active_subscription(user.id):
+            await update.message.reply_text(
+                "⚠️ <b>No Active Subscription!</b>\n\n"
+                "You need an active subscription to use the bot.\n"
+                "Buy a package for unlimited lookups!",
+                reply_markup=main_menu_keyboard(), parse_mode="HTML",
+            )
+            return
+
+    allowed, wait_secs = _check_rate_limit(user.id)
+    if not allowed:
+        rate_msg = (
+            f"⏰ <b>Rate Limit!</b>\n\n"
+            f"You've made {RATE_LIMIT_MAX} lookups in the last minute.\n"
+            f"Please wait <b>{wait_secs}s</b> before trying again.\n\n"
+            "This prevents API abuse and keeps the bot running for everyone."
+        )
+        await update.message.reply_text(
+            rate_msg,
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    # Parse phone number from command arguments or message
+    phone_number = None
+    if context.args and len(context.args) > 0:
+        phone_number = context.args[0].replace(" ", "").replace("-", "").replace("+", "")
+    else:
+        await update.message.reply_text(
+            "🔍 <b>Enter Phone Number for Leak Lookup:</b>\n\n"
+            "Usage: <code>/num 9876543210</code>\n"
+            "Or just type a 10-digit phone number.\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_num"] = True
+        return
+
+    if not phone_number or not phone_number.isdigit() or len(phone_number) < 10 or len(phone_number) > 15:
+        await update.message.reply_text(
+            "❌ <b>Invalid phone number!</b>\n\n"
+            "Please enter a valid phone number.\n"
+            "Example: <code>/num 9876543210</code>",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    loading_msg = await update.message.reply_text(
+        f"🔍 <b>Looking up leak details for</b> <code>{phone_number}</code>...\nPlease wait.",
+        parse_mode="HTML",
+    )
+
+    # Fetch numleak data with 10-second timeout
+    try:
+        result_leak = await asyncio.wait_for(
+            api_client.lookup_numleak(phone_number),
+            timeout=10
+        )
+    except asyncio.TimeoutError:
+        await loading_msg.edit_text(
+            f"⏰ <b>Request Timeout</b>\n\n"
+            f"The lookup for <code>{phone_number}</code> timed out after 10 seconds.\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    logger.info(f"Numleak API: success={result_leak['success']}, error={result_leak.get('error')}")
+
+    if not result_leak["success"]:
+        err_leak = result_leak.get('error', 'Unknown')
+        await loading_msg.edit_text(
+            f"❌ <b>Lookup Failed</b>\n\n"
+            f"Error: {err_leak}\n\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    numleak_data_raw = result_leak.get("data", {})
+    has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
+
+    if not has_leak_data:
+        await loading_msg.edit_text(
+            f"❌ <b>No leak data found</b> for <code>{phone_number}</code>.\n\n"
+            "The number may not exist in the leak database or the API is rate limited.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        db.record_lookup(user.id)
+
+    _record_lookup(user.id)
+
+    combined_data = {
+        "number": phone_number,
+        "numleak_data": numleak_data_raw,
+        "lookup_type": "numleak"
+    }
+
+    db.log_lookup(user.id, phone_number, True)
+    db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
+
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+
+    # Generate text report
+    from pdf_exporter import generate_numleak_text_report
+    text_report = generate_numleak_text_report(combined_data)
+    code_block = f"<pre>{text_report}</pre>"
+    
+    if len(code_block) + 50 > MAX_MSG_LEN:
+        part1 = text_report[:3800]
+        part2 = text_report[3800:]
+        await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
+        if part2:
+            await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
+    else:
+        await update.message.reply_text(code_block, parse_mode="HTML")
+
+    # Generate PDF
+    try:
+        from pdf_exporter import generate_numleak_pdf
+        pdf_buffer = generate_numleak_pdf(combined_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename=f"NUMLEAK_{phone_number}.pdf",
+            caption=f"📄 <b>Leak Report</b> for <code>{phone_number}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        await update.message.reply_text(
+            f"⚠️ PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
+            parse_mode="HTML",
+        )
+
+    header = (
+        f"📱 <b>Leak Lookup Complete for {phone_number}</b>\n"
+        f"💰 <b>Unlimited lookups</b> — Active subscription"
+    )
+    await update.message.reply_text(
+        header,
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
+
+    context.user_data["last_lookup"] = combined_data
+
+    await update.message.reply_text(
+        "📥 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
+        reply_markup=export_keyboard(phone_number),
+        parse_mode="HTML",
+    )
+
+
+async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /upi command - Mobile number to UPI details lookup."""
+    user = update.effective_user
+    is_admin_user = user.id in ADMIN_IDS
+
+    # Enforce channel join for non-admins
+    if not is_admin_user:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+
+    if db.is_banned(user.id):
+        await update.message.reply_text(
+            "🚫 You are <b>banned</b> from using this bot.\nContact admin for support.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        if not db.has_active_subscription(user.id):
+            await update.message.reply_text(
+                "⚠️ <b>No Active Subscription!</b>\n\n"
+                "You need an active subscription to use the bot.\n"
+                "Buy a package for unlimited lookups!",
+                reply_markup=main_menu_keyboard(), parse_mode="HTML",
+            )
+            return
+
+    allowed, wait_secs = _check_rate_limit(user.id)
+    if not allowed:
+        rate_msg = (
+            f"⏰ <b>Rate Limit!</b>\n\n"
+            f"You've made {RATE_LIMIT_MAX} lookups in the last minute.\n"
+            f"Please wait <b>{wait_secs}s</b> before trying again.\n\n"
+            "This prevents API abuse and keeps the bot running for everyone."
+        )
+        await update.message.reply_text(
+            rate_msg,
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    # Parse phone number from command arguments or message
+    phone_number = None
+    if context.args and len(context.args) > 0:
+        phone_number = context.args[0].replace(" ", "").replace("-", "").replace("+", "")
+    else:
+        await update.message.reply_text(
+            "🔍 <b>Enter Phone Number for UPI Lookup:</b>\n\n"
+            "Usage: <code>/upi 9876543210</code>\n"
+            "Or just type a 10-digit phone number.\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_upi"] = True
+        return
+
+    if not phone_number or not phone_number.isdigit() or len(phone_number) < 10 or len(phone_number) > 15:
+        await update.message.reply_text(
+            "❌ <b>Invalid phone number!</b>\n\n"
+            "Please enter a valid phone number.\n"
+            "Example: <code>/upi 9876543210</code>",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    loading_msg = await update.message.reply_text(
+        f"🔍 <b>Looking up UPI details for</b> <code>{phone_number}</code>...\nPlease wait.",
+        parse_mode="HTML",
+    )
+
+    # Fetch numtoupi data with 10-second timeout
+    try:
+        result_upi = await asyncio.wait_for(
+            api_client.lookup_numtoupi(phone_number),
+            timeout=10
+        )
+    except asyncio.TimeoutError:
+        await loading_msg.edit_text(
+            f"⏰ <b>Request Timeout</b>\n\n"
+            f"The lookup for <code>{phone_number}</code> timed out after 10 seconds.\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    logger.info(f"Numtoupi API: success={result_upi['success']}, error={result_upi.get('error')}")
+
+    if not result_upi["success"]:
+        err_upi = result_upi.get('error', 'Unknown')
+        await loading_msg.edit_text(
+            f"❌ <b>Lookup Failed</b>\n\n"
+            f"Error: {err_upi}\n\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    upi_data_raw = result_upi.get("data", {})
+    has_upi_data = bool(upi_data_raw.get("upi") or upi_data_raw.get("account") or upi_data_raw.get("transaction") or upi_data_raw.get("data"))
+
+    if not has_upi_data:
+        await loading_msg.edit_text(
+            f"❌ <b>No UPI data found</b> for <code>{phone_number}</code>.\n\n"
+            "The number may not be linked to any UPI account or the API is rate limited.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        db.record_lookup(user.id)
+
+    _record_lookup(user.id)
+
+    combined_data = {
+        "number": phone_number,
+        "upi_data": upi_data_raw,
+        "lookup_type": "numtoupi"
+    }
+
+    db.log_lookup(user.id, phone_number, True)
+    db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
+
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+
+    # Generate text report
+    from pdf_exporter import generate_upi_text_report
+    text_report = generate_upi_text_report(combined_data)
+    code_block = f"<pre>{text_report}</pre>"
+    
+    if len(code_block) + 50 > MAX_MSG_LEN:
+        part1 = text_report[:3800]
+        part2 = text_report[3800:]
+        await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
+        if part2:
+            await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
+    else:
+        await update.message.reply_text(code_block, parse_mode="HTML")
+
+    # Generate PDF
+    try:
+        from pdf_exporter import generate_upi_pdf
+        pdf_buffer = generate_upi_pdf(combined_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename=f"UPI_{phone_number}.pdf",
+            caption=f"📄 <b>UPI Report</b> for <code>{phone_number}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        await update.message.reply_text(
+            f"⚠️ PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
+            parse_mode="HTML",
+        )
+
+    header = (
+        f"📱 <b>UPI Lookup Complete for {phone_number}</b>\n"
+        f"💰 <b>Unlimited lookups</b> — Active subscription"
+    )
+    await update.message.reply_text(
+        header,
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
+
+    context.user_data["last_lookup"] = combined_data
+
+    await update.message.reply_text(
+        "📥 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
+        reply_markup=export_keyboard(phone_number),
+        parse_mode="HTML",
+    )
+
+
+async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /vehicle command - Vehicle registration details lookup."""
+    user = update.effective_user
+    is_admin_user = user.id in ADMIN_IDS
+
+    # Enforce channel join for non-admins
+    if not is_admin_user:
+        is_member, not_joined = await check_user_channels(user.id, context.bot)
+        if not is_member:
+            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            text = (
+                "🔴 <b>Join Required Channels!</b>\n\n"
+                "You must join the following channels:\n\n"
+                f"{channel_list}\n\n"
+                "After joining, tap the button below to verify."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=required_channels_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+
+    if db.is_banned(user.id):
+        await update.message.reply_text(
+            "🚫 You are <b>banned</b> from using this bot.\nContact admin for support.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        if not db.has_active_subscription(user.id):
+            await update.message.reply_text(
+                "⚠️ <b>No Active Subscription!</b>\n\n"
+                "You need an active subscription to use the bot.\n"
+                "Buy a package for unlimited lookups!",
+                reply_markup=main_menu_keyboard(), parse_mode="HTML",
+            )
+            return
+
+    allowed, wait_secs = _check_rate_limit(user.id)
+    if not allowed:
+        rate_msg = (
+            f"⏰ <b>Rate Limit!</b>\n\n"
+            f"You've made {RATE_LIMIT_MAX} lookups in the last minute.\n"
+            f"Please wait <b>{wait_secs}s</b> before trying again.\n\n"
+            "This prevents API abuse and keeps the bot running for everyone."
+        )
+        await update.message.reply_text(
+            rate_msg,
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    # Parse vehicle plate from command arguments or message
+    vehicle_plate = None
+    if context.args and len(context.args) > 0:
+        vehicle_plate = context.args[0].strip().upper()
+    else:
+        await update.message.reply_text(
+            "🚗 <b>Enter Vehicle Registration Number:</b>\n\n"
+            "Usage: <code>/vehicle MH12AB1234</code>\n"
+            "Or just type a valid vehicle plate number.\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_vehicle"] = True
+        return
+
+    if not vehicle_plate or len(vehicle_plate) < 5 or len(vehicle_plate) > 15:
+        await update.message.reply_text(
+            "❌ <b>Invalid vehicle number!</b>\n\n"
+            "Please enter a valid vehicle registration number.\n"
+            "Example: <code>/vehicle MH12AB1234</code>",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+
+    loading_msg = await update.message.reply_text(
+        f"🚗 <b>Looking up vehicle details for</b> <code>{vehicle_plate}</code>...\nPlease wait.",
+        parse_mode="HTML",
+    )
+
+    # Fetch vehicle data with 10-second timeout
+    try:
+        result_vehicle = await asyncio.wait_for(
+            api_client.lookup_vehicle(vehicle_plate),
+            timeout=10
+        )
+    except asyncio.TimeoutError:
+        await loading_msg.edit_text(
+            f"⏰ <b>Request Timeout</b>\n\n"
+            f"The lookup for <code>{vehicle_plate}</code> timed out after 10 seconds.\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    logger.info(f"Vehicle API: success={result_vehicle['success']}, error={result_vehicle.get('error')}")
+
+    if not result_vehicle["success"]:
+        err_vehicle = result_vehicle.get('error', 'Unknown')
+        await loading_msg.edit_text(
+            f"❌ <b>Lookup Failed</b>\n\n"
+            f"Error: {err_vehicle}\n\n"
+            "Please try again later or contact @HATHI02.",
+            parse_mode="HTML",
+        )
+        return
+
+    vehicle_data_raw = result_vehicle.get("data", {})
+    has_vehicle_data = bool(vehicle_data_raw.get("vehicle") or vehicle_data_raw.get("owner") or vehicle_data_raw.get("data") or vehicle_data_raw.get("registration_number"))
+
+    if not has_vehicle_data:
+        await loading_msg.edit_text(
+            f"❌ <b>No vehicle data found</b> for <code>{vehicle_plate}</code>.\n\n"
+            "The vehicle may not exist in the database or the API is rate limited.",
+            parse_mode="HTML",
+        )
+        return
+
+    if not is_admin_user:
+        db.record_lookup(user.id)
+
+    _record_lookup(user.id)
+
+    combined_data = {
+        "vehicle_plate": vehicle_plate,
+        "vehicle_data": vehicle_data_raw,
+        "lookup_type": "vehicle"
+    }
+
+    db.log_lookup(user.id, vehicle_plate, True)
+    db.save_lookup_result(user.id, vehicle_plate, json.dumps(combined_data))
+
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+
+    # Generate text report
+    from pdf_exporter import generate_vehicle_text_report
+    text_report = generate_vehicle_text_report(combined_data)
+    code_block = f"<pre>{text_report}</pre>"
+    
+    if len(code_block) + 50 > MAX_MSG_LEN:
+        part1 = text_report[:3800]
+        part2 = text_report[3800:]
+        await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
+        if part2:
+            await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
+    else:
+        await update.message.reply_text(code_block, parse_mode="HTML")
+
+    # Generate PDF
+    try:
+        from pdf_exporter import generate_vehicle_pdf
+        pdf_buffer = generate_vehicle_pdf(combined_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename=f"VEHICLE_{vehicle_plate}.pdf",
+            caption=f"📄 <b>Vehicle Report</b> for <code>{vehicle_plate}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        await update.message.reply_text(
+            f"⚠️ PDF generation failed: {str(e)[:100]}\nText report above is still valid.",
+            parse_mode="HTML",
+        )
+
+    header = (
+        f"🚗 <b>Vehicle Lookup Complete for {vehicle_plate}</b>\n"
+        f"💰 <b>Unlimited lookups</b> — Active subscription"
+    )
+    await update.message.reply_text(
+        header,
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
+
+    context.user_data["last_lookup"] = combined_data
+
+    await update.message.reply_text(
+        "📥 <b>Export Report</b>\n\nTap below to download this report as a styled image.",
+        reply_markup=export_keyboard(vehicle_plate),
         parse_mode="HTML",
     )
 

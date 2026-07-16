@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Telegram Bot
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8426678718:AAHmYodZH82VD2DOq60vFwXoJSwfG8eLt2I")
 
 # OSINT APIs
-OSINT_API_NUMBER_URL = os.getenv("OSINT_API_NUMBER_URL", "https://ft-osint-api.duckdns.org/api/number")
 OSINT_API_NUMLEAK_URL = os.getenv("OSINT_API_NUMLEAK_URL", "https://ft-osint-api.duckdns.org/api/numleak")
-OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi")
+OSINT_API_NUMTOUPI_URL = os.getenv("OSINT_API_NUMTOUPI_URL", "https://ft-osint-api.duckdns.org/api/numtoupi")
+OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://vh-num.vercel.app/fetch")
+OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
 
 # Optional API relay/proxy URL (set this if Railway blocks direct API access)
 # Example: "https://your-relay.workers.dev/proxy" or "http://your-vps:8080/proxy"

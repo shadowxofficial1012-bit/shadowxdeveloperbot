@@ -409,3 +409,672 @@ def generate_text_report(data: dict) -> str:
     lines.append(f"  Developed by @shadowxdeveloper")
 
     return "\n".join(lines)
+
+
+# === NUMLEAK TEXT REPORT ===
+def generate_numleak_text_report(data: dict) -> str:
+    """Generate a text report for numleak data (breach/leak details)."""
+    number = data.get("number", "N/A")
+    numleak_data = data.get("numleak_data", {})
+
+    lines = []
+    lines.append("╔══════════════════════════════════════════════════╗")
+    lines.append("║       DATA LEAK INTELLIGENCE REPORT             ║")
+    lines.append("╚══════════════════════════════════════════════════╝")
+    lines.append(f"  Target: {number}")
+    lines.append("")
+
+    chain = numleak_data.get("chain", {})
+    calltracer = numleak_data.get("calltracer", {})
+
+    # Chain / breach source data
+    if chain:
+        lines.append("=" * 50)
+        lines.append("  BREACH SOURCE")
+        lines.append("-" * 50)
+        lines.append(f"  TITLE          : {safe_str(chain.get('title'))}")
+        lines.append(f"  DESCRIPTION    : {safe_str(chain.get('description', ''))[:120]}")
+        lines.append("")
+
+        leak_records = chain.get("records", [])
+        for i, record in enumerate(leak_records[:10], 1):
+            lines.append(f"  ┌── LEAK RECORD #{i} ──")
+            lines.append(f"  │ FULL NAME      : {safe_str(record.get('FullName'))}")
+            lines.append(f"  │ FATHER NAME    : {safe_str(record.get('FatherName'))}")
+            lines.append(f"  │ DOCUMENT       : {safe_str(record.get('DocumentNumber'))}")
+            lines.append(f"  │ PHONE          : {safe_str(record.get('Phone'))}")
+            if record.get("Phone2"):
+                lines.append(f"  │ PHONE 2        : {safe_str(record.get('Phone2'))}")
+            if record.get("Phone3"):
+                lines.append(f"  │ PHONE 3        : {safe_str(record.get('Phone3'))}")
+            lines.append(f"  │ ADDRESS        : {safe_str(record.get('Adres'))[:80]}")
+            lines.append(f"  │ REGION         : {safe_str(record.get('Region'))}")
+            lines.append(f"  └{'─' * 40}")
+            lines.append("")
+
+        if len(leak_records) > 10:
+            lines.append(f"  ... and {len(leak_records) - 10} more records")
+            lines.append("")
+
+    # Calltracer data
+    if calltracer:
+        lines.append("=" * 50)
+        lines.append("  CARRIER / SIM INFO")
+        lines.append("-" * 50)
+        lines.append(f"  NUMBER         : {safe_str(calltracer.get('Number'))}")
+        lines.append(f"  SIM CARD       : {safe_str(calltracer.get('SIM card'))}")
+        lines.append(f"  MOBILE STATE   : {safe_str(calltracer.get('Mobile State'))}")
+        lines.append(f"  CONNECTION     : {safe_str(calltracer.get('Connection'))}")
+        if calltracer.get("Hometown"):
+            lines.append(f"  HOMETOWN       : {safe_str(calltracer.get('Hometown'))}")
+        if calltracer.get("Language"):
+            lines.append(f"  LANGUAGE       : {safe_str(calltracer.get('Language'))}")
+        if calltracer.get("IMEI number"):
+            lines.append(f"  IMEI           : {safe_str(calltracer.get('IMEI number'))}")
+        if calltracer.get("Tracking History"):
+            lines.append(f"  TRACKING       : {safe_str(calltracer.get('Tracking History'))}")
+        lines.append("")
+
+    if not chain and not calltracer:
+        lines.append("  No leak or carrier data found for this number.")
+        lines.append("")
+
+    lines.append("═" * 50)
+    lines.append(f"  Powered by @HATHI02")
+    return "\n".join(lines)
+
+
+# === UPI TEXT REPORT ===
+def generate_upi_text_report(data: dict) -> str:
+    """Generate a text report for UPI lookup data."""
+    number = data.get("number", "N/A")
+    upi_data = data.get("upi_data", {})
+
+    lines = []
+    lines.append("╔══════════════════════════════════════════════════╗")
+    lines.append("║       UPI INTELLIGENCE REPORT                   ║")
+    lines.append("╚══════════════════════════════════════════════════╝")
+    lines.append(f"  Target Number: {number}")
+    lines.append("")
+
+    # Handle different response formats
+    # The API may return data in different structures
+    accounts = upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else []
+    transactions = upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else []
+    
+    # Flat response format
+    if not accounts and not transactions:
+        accounts = upi_data.get("accounts", [])
+        transactions = upi_data.get("transactions", [])
+
+    # Display all key-value pairs from the response
+    if upi_data:
+        lines.append("=" * 50)
+        lines.append("  UPI DETAILS")
+        lines.append("-" * 50)
+        
+        # Print top-level fields
+        for key, value in upi_data.items():
+            if key in ["accounts", "transactions", "data"]:
+                continue
+            if isinstance(value, (dict, list)):
+                continue
+            lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        
+        # Print nested data fields
+        nested = upi_data.get("data", {})
+        if isinstance(nested, dict):
+            for key, value in nested.items():
+                if key in ["accounts", "transactions"]:
+                    continue
+                if isinstance(value, (dict, list)):
+                    continue
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        lines.append("")
+
+    # Accounts
+    if accounts:
+        lines.append("=" * 50)
+        lines.append("  LINKED UPI ACCOUNTS")
+        lines.append("-" * 50)
+        for i, acc in enumerate(accounts[:10], 1):
+            lines.append(f"  ┌── ACCOUNT #{i} ──")
+            if isinstance(acc, dict):
+                for key, value in acc.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    lines.append(f"  │ {key.upper():<16}: {safe_str(value)}")
+            else:
+                lines.append(f"  │ UPI ID         : {safe_str(acc)}")
+            lines.append(f"  └{'─' * 40}")
+            lines.append("")
+
+    # Transactions
+    if transactions:
+        lines.append("=" * 50)
+        lines.append("  TRANSACTION HISTORY")
+        lines.append("-" * 50)
+        for i, tx in enumerate(transactions[:10], 1):
+            lines.append(f"  ┌── TRANSACTION #{i} ──")
+            if isinstance(tx, dict):
+                for key, value in tx.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    lines.append(f"  │ {key.upper():<16}: {safe_str(value)}")
+            else:
+                lines.append(f"  │ TXN            : {safe_str(tx)}")
+            lines.append(f"  └{'─' * 40}")
+            lines.append("")
+
+    lines.append("═" * 50)
+    lines.append(f"  Powered by @HATHI02")
+    return "\n".join(lines)
+
+
+# === VEHICLE TEXT REPORT ===
+def generate_vehicle_text_report(data: dict) -> str:
+    """Generate a text report for vehicle registration data."""
+    plate = data.get("vehicle_plate", "N/A")
+    vehicle_data = data.get("vehicle_data", {})
+
+    lines = []
+    lines.append("╔══════════════════════════════════════════════════╗")
+    lines.append("║       VEHICLE REGISTRATION REPORT               ║")
+    lines.append("╚══════════════════════════════════════════════════╝")
+    lines.append(f"  Plate Number: {plate}")
+    lines.append("")
+
+    # Parse vehicle data - may come in different formats
+    owner = vehicle_data.get("owner", {})
+    vehicle = vehicle_data.get("vehicle", {})
+    insurance = vehicle_data.get("insurance", {})
+    technical = vehicle_data.get("technical", {})
+    
+    # Flat response format fallback
+    if not owner and not vehicle:
+        # Try to map flat fields
+        owner = {
+            "name": vehicle_data.get("owner_name") or vehicle_data.get("name"),
+            "father_name": vehicle_data.get("father_name") or vehicle_data.get("fname"),
+            "address": vehicle_data.get("owner_address") or vehicle_data.get("address"),
+        }
+        vehicle = {
+            "registration_number": vehicle_data.get("registration_number") or vehicle_data.get("reg_no"),
+            "maker": vehicle_data.get("maker") or vehicle_data.get("company"),
+            "model": vehicle_data.get("model"),
+            "color": vehicle_data.get("color"),
+            "fuel_type": vehicle_data.get("fuel_type") or vehicle_data.get("fuel"),
+            "seating_capacity": vehicle_data.get("seating_capacity") or vehicle_data.get("seats"),
+            "vehicle_class": vehicle_data.get("vehicle_class") or vehicle_data.get("category"),
+            "registration_date": vehicle_data.get("registration_date") or vehicle_data.get("reg_date"),
+            "fitness_upto": vehicle_data.get("fitness_upto"),
+            "tax_upto": vehicle_data.get("tax_upto"),
+        }
+        insurance = {
+            "policy_number": vehicle_data.get("policy_number"),
+            "insurance_upto": vehicle_data.get("insurance_upto"),
+            "insurer": vehicle_data.get("insurer") or vehicle_data.get("insurance_company"),
+        }
+        technical = {
+            "chassis_number": vehicle_data.get("chassis_number") or vehicle_data.get("chassis"),
+            "engine_number": vehicle_data.get("engine_number") or vehicle_data.get("engine"),
+            "engine_capacity": vehicle_data.get("engine_capacity"),
+            "norms_type": vehicle_data.get("norms_type"),
+            "financier": vehicle_data.get("financier"),
+            "mv_tax_upto": vehicle_data.get("mv_tax_upto"),
+        }
+
+    # OWNER section
+    if owner:
+        lines.append("=" * 50)
+        lines.append("  OWNER DETAILS")
+        lines.append("-" * 50)
+        if isinstance(owner, dict):
+            for key, value in owner.items():
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        else:
+            lines.append(f"  OWNER           : {safe_str(owner)}")
+        lines.append("")
+
+    # VEHICLE section
+    if vehicle:
+        lines.append("=" * 50)
+        lines.append("  VEHICLE DETAILS")
+        lines.append("-" * 50)
+        if isinstance(vehicle, dict):
+            for key, value in vehicle.items():
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        else:
+            lines.append(f"  VEHICLE         : {safe_str(vehicle)}")
+        lines.append("")
+
+    # INSURANCE section
+    if insurance:
+        lines.append("=" * 50)
+        lines.append("  INSURANCE DETAILS")
+        lines.append("-" * 50)
+        if isinstance(insurance, dict):
+            for key, value in insurance.items():
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        else:
+            lines.append(f"  INSURANCE       : {safe_str(insurance)}")
+        lines.append("")
+
+    # TECHNICAL section
+    if technical:
+        lines.append("=" * 50)
+        lines.append("  TECHNICAL DETAILS")
+        lines.append("-" * 50)
+        if isinstance(technical, dict):
+            for key, value in technical.items():
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        else:
+            lines.append(f"  TECHNICAL       : {safe_str(technical)}")
+        lines.append("")
+
+    # Fallback: print all remaining keys
+    if not owner and not vehicle and not insurance and not technical:
+        lines.append("=" * 50)
+        lines.append("  VEHICLE DATA")
+        lines.append("-" * 50)
+        for key, value in vehicle_data.items():
+            if isinstance(value, dict):
+                lines.append(f"  {key.upper():<18}:")
+                for k2, v2 in value.items():
+                    lines.append(f"    {k2.upper():<16}: {safe_str(v2)}")
+            elif isinstance(value, list):
+                lines.append(f"  {key.upper():<18}: ({len(value)} items)")
+            else:
+                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+        lines.append("")
+
+    lines.append("═" * 50)
+    lines.append(f"  Powered by @HATHI02")
+    return "\n".join(lines)
+
+
+# === NUMLEAK PDF ===
+
+class NumleakReportPDF(OSINTReportPDF):
+    """PDF for numleak-only reports."""
+
+    def header(self):
+        self._draw_dark_bg()
+        self.set_fill_color(*NEON_RED)
+        self.rect(0, 0, 210, 3, "F")
+        self.set_y(10)
+        self.set_font("Courier", "B", 18)
+        self.set_text_color(*NEON_RED)
+        self.cell(0, 12, "DATA LEAK REPORT", ln=True, align="C")
+        self.set_font("Courier", "B", 14)
+        self.set_text_color(*NEON_CYAN)
+        self.cell(0, 10, "BREACH INTELLIGENCE", ln=True, align="C")
+        self.set_draw_color(*NEON_RED)
+        self.line(30, self.get_y() + 2, 180, self.get_y() + 2)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-20)
+        self.set_fill_color(*NEON_RED)
+        self.rect(0, 294, 210, 3, "F")
+        self.set_font("Courier", "", 7)
+        self.set_text_color(*TEXT_DIM)
+        self.cell(0, 5, f"Powered by @{BRAND_NAME} | Data Leak Intelligence", align="C")
+        self.ln(4)
+        self.set_text_color(60, 60, 80)
+        self.cell(0, 5, f"Page {self.page_no()}/{{nb}}", align="C")
+
+
+def generate_numleak_pdf(data: dict) -> io.BytesIO:
+    """Generate PDF for numleak data."""
+    number = data.get("number", "N/A")
+    numleak_data = data.get("numleak_data", {})
+
+    pdf = NumleakReportPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    pdf.info_box(f"TARGET: {number}", NEON_RED)
+    pdf.ln(2)
+
+    chain = numleak_data.get("chain", {})
+    calltracer = numleak_data.get("calltracer", {})
+
+    # Chain / breach source
+    if chain:
+        pdf.section_header("BREACH SOURCE", NEON_RED)
+        pdf.label_value("Title", safe_str(chain.get("title")), value_color=NEON_YELLOW)
+        desc = safe_str(chain.get("description", ""))[:120]
+        pdf.label_value("Description", desc)
+        pdf.ln(2)
+
+        leak_records = chain.get("records", [])
+        if leak_records:
+            pdf.section_header(f"LEAKED RECORDS ({len(leak_records)} total)", NEON_RED)
+            for i, record in enumerate(leak_records[:10], 1):
+                pdf.record_header(i, NEON_RED)
+                pdf.label_value("Full Name", safe_str(record.get("FullName")), value_color=NEON_GREEN)
+                pdf.label_value("Father Name", safe_str(record.get("FatherName")))
+                pdf.label_value("Document", safe_str(record.get("DocumentNumber")), value_color=NEON_YELLOW)
+                pdf.label_value("Phone", safe_str(record.get("Phone")), value_color=NEON_CYAN)
+                if record.get("Phone2"):
+                    pdf.label_value("Phone 2", safe_str(record.get("Phone2")))
+                if record.get("Phone3"):
+                    pdf.label_value("Phone 3", safe_str(record.get("Phone3")))
+                pdf.label_value("Address", safe_str(record.get("Adres"))[:80])
+                pdf.label_value("Region", safe_str(record.get("Region")))
+                pdf.ln(2)
+
+            if len(leak_records) > 10:
+                pdf.set_font("Courier", "", 8)
+                pdf.set_text_color(*TEXT_DIM)
+                pdf.cell(0, 5, f"  ... and {len(leak_records) - 10} more records", ln=True)
+                pdf.ln(2)
+
+    # Calltracer
+    if calltracer:
+        pdf.divider()
+        pdf.section_header("CARRIER / SIM INFO", NEON_CYAN)
+        pdf.label_value("Number", safe_str(calltracer.get("Number")))
+        pdf.label_value("SIM Card", safe_str(calltracer.get("SIM card")), value_color=NEON_GREEN)
+        pdf.label_value("Mobile State", safe_str(calltracer.get("Mobile State")))
+        pdf.label_value("Connection", safe_str(calltracer.get("Connection")), value_color=NEON_CYAN)
+        if calltracer.get("Hometown"):
+            pdf.label_value("Hometown", safe_str(calltracer.get("Hometown")))
+        if calltracer.get("Language"):
+            pdf.label_value("Language", safe_str(calltracer.get("Language")))
+        if calltracer.get("IMEI number"):
+            pdf.label_value("IMEI", safe_str(calltracer.get("IMEI number")), value_color=NEON_YELLOW)
+        if calltracer.get("Tracking History"):
+            pdf.label_value("Tracking", safe_str(calltracer.get("Tracking History")), value_color=NEON_YELLOW)
+        pdf.ln(2)
+
+    if not chain and not calltracer:
+        pdf.section_header("NO DATA", NEON_RED)
+        pdf.set_font("Courier", "", 9)
+        pdf.set_text_color(*NEON_RED)
+        pdf.cell(0, 6, "  No leak or carrier data found for this number.", ln=True)
+
+    pdf.divider()
+    pdf.set_font("Courier", "", 7)
+    pdf.set_text_color(*TEXT_DIM)
+    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+
+    buffer = io.BytesIO()
+    buffer.write(pdf.output())
+    buffer.seek(0)
+    return buffer
+
+
+# === UPI PDF ===
+
+class UPIReportPDF(OSINTReportPDF):
+    """PDF for UPI lookup reports."""
+
+    def header(self):
+        self._draw_dark_bg()
+        self.set_fill_color(*NEON_PURPLE)
+        self.rect(0, 0, 210, 3, "F")
+        self.set_y(10)
+        self.set_font("Courier", "B", 18)
+        self.set_text_color(*NEON_PURPLE)
+        self.cell(0, 12, "UPI INTEL REPORT", ln=True, align="C")
+        self.set_font("Courier", "B", 14)
+        self.set_text_color(*NEON_CYAN)
+        self.cell(0, 10, "PAYMENT INTELLIGENCE", ln=True, align="C")
+        self.set_draw_color(*NEON_PURPLE)
+        self.line(30, self.get_y() + 2, 180, self.get_y() + 2)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-20)
+        self.set_fill_color(*NEON_PURPLE)
+        self.rect(0, 294, 210, 3, "F")
+        self.set_font("Courier", "", 7)
+        self.set_text_color(*TEXT_DIM)
+        self.cell(0, 5, f"Powered by @{BRAND_NAME} | UPI Intelligence", align="C")
+        self.ln(4)
+        self.set_text_color(60, 60, 80)
+        self.cell(0, 5, f"Page {self.page_no()}/{{nb}}", align="C")
+
+
+def generate_upi_pdf(data: dict) -> io.BytesIO:
+    """Generate PDF for UPI lookup data."""
+    number = data.get("number", "N/A")
+    upi_data = data.get("upi_data", {})
+
+    pdf = UPIReportPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    pdf.info_box(f"TARGET: {number}", NEON_PURPLE)
+    pdf.ln(2)
+
+    # Handle different response formats
+    accounts = upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else []
+    transactions = upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else []
+    
+    if not accounts and not transactions:
+        accounts = upi_data.get("accounts", [])
+        transactions = upi_data.get("transactions", [])
+
+    # Top-level fields
+    pdf.section_header("UPI DETAILS", NEON_PURPLE)
+    for key, value in upi_data.items():
+        if key in ["accounts", "transactions", "data"]:
+            continue
+        if isinstance(value, (dict, list)):
+            continue
+        pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=NEON_CYAN)
+
+    nested = upi_data.get("data", {})
+    if isinstance(nested, dict):
+        for key, value in nested.items():
+            if key in ["accounts", "transactions"]:
+                continue
+            if isinstance(value, (dict, list)):
+                continue
+            pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=NEON_CYAN)
+    pdf.ln(2)
+    pdf.divider()
+
+    # Accounts
+    if accounts:
+        pdf.section_header(f"LINKED UPI ACCOUNTS ({len(accounts)})", NEON_GREEN)
+        for i, acc in enumerate(accounts[:10], 1):
+            pdf.record_header(i, NEON_GREEN)
+            if isinstance(acc, dict):
+                for key, value in acc.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    color = NEON_YELLOW if key.lower() in ["upi_id", "vpa", "id"] else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+            else:
+                pdf.label_value("UPI ID", safe_str(acc), value_color=NEON_YELLOW)
+            pdf.ln(2)
+
+    # Transactions
+    if transactions:
+        pdf.section_header(f"TRANSACTION HISTORY ({len(transactions)})", NEON_YELLOW)
+        for i, tx in enumerate(transactions[:10], 1):
+            pdf.record_header(i, NEON_YELLOW)
+            if isinstance(tx, dict):
+                for key, value in tx.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    color = NEON_GREEN if key.lower() in ["amount", "status"] else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+            else:
+                pdf.label_value("Transaction", safe_str(tx))
+            pdf.ln(2)
+
+    if not accounts and not transactions and not upi_data:
+        pdf.section_header("NO DATA", NEON_RED)
+        pdf.set_font("Courier", "", 9)
+        pdf.set_text_color(*NEON_RED)
+        pdf.cell(0, 6, "  No UPI data found for this number.", ln=True)
+
+    pdf.divider()
+    pdf.set_font("Courier", "", 7)
+    pdf.set_text_color(*TEXT_DIM)
+    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+
+    buffer = io.BytesIO()
+    buffer.write(pdf.output())
+    buffer.seek(0)
+    return buffer
+
+
+# === VEHICLE PDF ===
+
+class VehicleReportPDF(OSINTReportPDF):
+    """PDF for vehicle registration reports."""
+
+    def header(self):
+        self._draw_dark_bg()
+        self.set_fill_color(*NEON_YELLOW)
+        self.rect(0, 0, 210, 3, "F")
+        self.set_y(10)
+        self.set_font("Courier", "B", 18)
+        self.set_text_color(*NEON_YELLOW)
+        self.cell(0, 12, "VEHICLE REGISTRY", ln=True, align="C")
+        self.set_font("Courier", "B", 14)
+        self.set_text_color(*NEON_CYAN)
+        self.cell(0, 10, "REGISTRATION REPORT", ln=True, align="C")
+        self.set_draw_color(*NEON_YELLOW)
+        self.line(30, self.get_y() + 2, 180, self.get_y() + 2)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-20)
+        self.set_fill_color(*NEON_YELLOW)
+        self.rect(0, 294, 210, 3, "F")
+        self.set_font("Courier", "", 7)
+        self.set_text_color(*TEXT_DIM)
+        self.cell(0, 5, f"Powered by @{BRAND_NAME} | Vehicle Intelligence", align="C")
+        self.ln(4)
+        self.set_text_color(60, 60, 80)
+        self.cell(0, 5, f"Page {self.page_no()}/{{nb}}", align="C")
+
+
+def generate_vehicle_pdf(data: dict) -> io.BytesIO:
+    """Generate PDF for vehicle registration data."""
+    plate = data.get("vehicle_plate", "N/A")
+    vehicle_data = data.get("vehicle_data", {})
+
+    pdf = VehicleReportPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    pdf.info_box(f"PLATE: {plate}", NEON_YELLOW)
+    pdf.ln(2)
+
+    owner = vehicle_data.get("owner", {})
+    vehicle = vehicle_data.get("vehicle", {})
+    insurance = vehicle_data.get("insurance", {})
+    technical = vehicle_data.get("technical", {})
+
+    # Flat response fallback
+    if not owner and not vehicle:
+        owner = {
+            "name": vehicle_data.get("owner_name") or vehicle_data.get("name"),
+            "father_name": vehicle_data.get("father_name") or vehicle_data.get("fname"),
+            "address": vehicle_data.get("owner_address") or vehicle_data.get("address"),
+        }
+        vehicle = {
+            "registration_number": vehicle_data.get("registration_number") or vehicle_data.get("reg_no"),
+            "maker": vehicle_data.get("maker") or vehicle_data.get("company"),
+            "model": vehicle_data.get("model"),
+            "color": vehicle_data.get("color"),
+            "fuel_type": vehicle_data.get("fuel_type") or vehicle_data.get("fuel"),
+            "seating_capacity": vehicle_data.get("seating_capacity") or vehicle_data.get("seats"),
+            "vehicle_class": vehicle_data.get("vehicle_class") or vehicle_data.get("category"),
+            "registration_date": vehicle_data.get("registration_date") or vehicle_data.get("reg_date"),
+            "fitness_upto": vehicle_data.get("fitness_upto"),
+            "tax_upto": vehicle_data.get("tax_upto"),
+        }
+        insurance = {
+            "policy_number": vehicle_data.get("policy_number"),
+            "insurance_upto": vehicle_data.get("insurance_upto"),
+            "insurer": vehicle_data.get("insurer") or vehicle_data.get("insurance_company"),
+        }
+        technical = {
+            "chassis_number": vehicle_data.get("chassis_number") or vehicle_data.get("chassis"),
+            "engine_number": vehicle_data.get("engine_number") or vehicle_data.get("engine"),
+            "engine_capacity": vehicle_data.get("engine_capacity"),
+            "norms_type": vehicle_data.get("norms_type"),
+            "financier": vehicle_data.get("financier"),
+            "mv_tax_upto": vehicle_data.get("mv_tax_upto"),
+        }
+
+    # OWNER section
+    if owner:
+        pdf.section_header("OWNER DETAILS", NEON_GREEN)
+        if isinstance(owner, dict):
+            for key, value in owner.items():
+                color = NEON_GREEN if key.lower() in ["name", "owner_name"] else TEXT_WHITE
+                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+        else:
+            pdf.label_value("Owner", safe_str(owner), value_color=NEON_GREEN)
+        pdf.ln(2)
+        pdf.divider()
+
+    # VEHICLE section
+    if vehicle:
+        pdf.section_header("VEHICLE DETAILS", NEON_CYAN)
+        if isinstance(vehicle, dict):
+            for key, value in vehicle.items():
+                color = NEON_YELLOW if key.lower() in ["registration_number", "reg_no"] else TEXT_WHITE
+                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+        else:
+            pdf.label_value("Vehicle", safe_str(vehicle), value_color=NEON_CYAN)
+        pdf.ln(2)
+        pdf.divider()
+
+    # INSURANCE section
+    if insurance:
+        pdf.section_header("INSURANCE DETAILS", NEON_PURPLE)
+        if isinstance(insurance, dict):
+            for key, value in insurance.items():
+                color = NEON_YELLOW if key.lower() in ["policy_number"] else TEXT_WHITE
+                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+        else:
+            pdf.label_value("Insurance", safe_str(insurance), value_color=NEON_PURPLE)
+        pdf.ln(2)
+        pdf.divider()
+
+    # TECHNICAL section
+    if technical:
+        pdf.section_header("TECHNICAL DETAILS", NEON_YELLOW)
+        if isinstance(technical, dict):
+            for key, value in technical.items():
+                color = NEON_RED if "chassis" in key.lower() or "engine" in key.lower() else TEXT_WHITE
+                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+        else:
+            pdf.label_value("Technical", safe_str(technical), value_color=NEON_YELLOW)
+        pdf.ln(2)
+        pdf.divider()
+
+    # Fallback: print all data
+    if not owner and not vehicle and not insurance and not technical:
+        pdf.section_header("VEHICLE DATA", NEON_CYAN)
+        for key, value in vehicle_data.items():
+            if isinstance(value, dict):
+                pdf.section_header(key.replace("_", " ").upper(), NEON_GREEN)
+                for k2, v2 in value.items():
+                    pdf.label_value(k2.replace("_", " ").title(), safe_str(v2))
+            elif isinstance(value, list):
+                pdf.label_value(key.replace("_", " ").title(), f"({len(value)} items)")
+            else:
+                pdf.label_value(key.replace("_", " ").title(), safe_str(value))
+        pdf.ln(2)
+
+    pdf.divider()
+    pdf.set_font("Courier", "", 7)
+    pdf.set_text_color(*TEXT_DIM)
+    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+
+    buffer = io.BytesIO()
+    buffer.write(pdf.output())
+    buffer.seek(0)
+    return buffer

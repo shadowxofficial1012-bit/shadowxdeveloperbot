@@ -25,6 +25,9 @@ from handlers import (
     handle_approve_command,
     handle_reject_command,
     check_user_channels,
+    handle_num_lookup,
+    handle_upi_lookup,
+    handle_vehicle_lookup,
 )
 from keyboards import required_channels_keyboard
 from admin import (
@@ -96,6 +99,9 @@ async def handle_text(update: Update, context):
     if text == "📱 Phone Lookup":
         # Clear any previous awaiting state
         context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_num", None)
+        context.user_data.pop("awaiting_upi", None)
+        context.user_data.pop("awaiting_vehicle", None)
         await update.message.reply_text(
             "🔍 <b>Enter Phone Number:</b>\n\n"
             "Type the 10-digit phone number:\n"
@@ -104,6 +110,48 @@ async def handle_text(update: Update, context):
             parse_mode="HTML",
         )
         context.user_data["awaiting_number"] = True
+        return
+
+    if text == "🔍 Num Leak":
+        context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_upi", None)
+        context.user_data.pop("awaiting_vehicle", None)
+        await update.message.reply_text(
+            "🔍 <b>Enter Phone Number for Leak Lookup:</b>\n\n"
+            "Type the 10-digit phone number:\n"
+            "Example: <code>9876543210</code>\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_num"] = True
+        return
+
+    if text == "💳 UPI Lookup":
+        context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_num", None)
+        context.user_data.pop("awaiting_vehicle", None)
+        await update.message.reply_text(
+            "💳 <b>Enter Phone Number for UPI Lookup:</b>\n\n"
+            "Type the 10-digit phone number:\n"
+            "Example: <code>9876543210</code>\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_upi"] = True
+        return
+
+    if text == "🚗 Vehicle Lookup":
+        context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_num", None)
+        context.user_data.pop("awaiting_upi", None)
+        await update.message.reply_text(
+            "🚗 <b>Enter Vehicle Registration Number:</b>\n\n"
+            "Type the plate number:\n"
+            "Example: <code>MH12AB1234</code>\n\n"
+            "💡 Or tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_vehicle"] = True
         return
 
     routes = {
@@ -115,8 +163,11 @@ async def handle_text(update: Update, context):
     }
 
     if text in routes:
-        # Clear awaiting_number when other buttons are pressed
+        # Clear all awaiting states when other buttons are pressed
         context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_num", None)
+        context.user_data.pop("awaiting_upi", None)
+        context.user_data.pop("awaiting_vehicle", None)
         route = routes[text]
         if route == "buy":
             await buy_plan(update, context)
@@ -144,6 +195,9 @@ async def handle_text(update: Update, context):
 
     if text in admin_routes and update.effective_user.id in ADMIN_IDS:
         context.user_data.pop("awaiting_number", None)
+        context.user_data.pop("awaiting_num", None)
+        context.user_data.pop("awaiting_upi", None)
+        context.user_data.pop("awaiting_vehicle", None)
         await admin_routes[text](update, context)
         return
 
@@ -170,6 +224,28 @@ async def handle_text(update: Update, context):
         context.user_data.pop("awaiting_number", None)
         # Channel check happens inside handle_lookup
         await handle_lookup(update, context)
+        return
+
+    # If awaiting number for num leak lookup
+    if context.user_data.get("awaiting_num"):
+        context.user_data.pop("awaiting_num", None)
+        # Override args so handler can process from message text
+        context.args = [text]
+        await handle_num_lookup(update, context)
+        return
+
+    # If awaiting number for UPI lookup
+    if context.user_data.get("awaiting_upi"):
+        context.user_data.pop("awaiting_upi", None)
+        context.args = [text]
+        await handle_upi_lookup(update, context)
+        return
+
+    # If awaiting vehicle plate for vehicle lookup
+    if context.user_data.get("awaiting_vehicle"):
+        context.user_data.pop("awaiting_vehicle", None)
+        context.args = [text]
+        await handle_vehicle_lookup(update, context)
         return
 
     # Default: show main menu
@@ -200,23 +276,29 @@ def main():
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Command handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("admin", admin_start))
-    app.add_handler(CommandHandler("demo", demo_result))
-    app.add_handler(CommandHandler("approve", handle_approve_command))
-    app.add_handler(CommandHandler("reject", handle_reject_command))
+    # Only respond in private chats (DMs) - ignore all group messages/commands
+    private_filter = filters.ChatType.PRIVATE
 
-    # Callback handler (inline buttons)
-    app.add_handler(CallbackQueryHandler(handle_callback))
+    # Command handlers (DM only)
+    app.add_handler(CommandHandler("start", start, filters=private_filter))
+    app.add_handler(CommandHandler("help", help_command, filters=private_filter))
+    app.add_handler(CommandHandler("admin", admin_start, filters=private_filter))
+    app.add_handler(CommandHandler("demo", demo_result, filters=private_filter))
+    app.add_handler(CommandHandler("approve", handle_approve_command, filters=private_filter))
+    app.add_handler(CommandHandler("reject", handle_reject_command, filters=private_filter))
+    app.add_handler(CommandHandler("num", handle_num_lookup, filters=private_filter))
+    app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
+    app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
 
-    # Text message handler
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    # Callback handler (inline buttons) - DM only
+    app.add_handler(CallbackQueryHandler(handle_callback, filters=private_filter))
 
-    # Photo/document handler (payment screenshots)
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    # Text message handler (DM only)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, handle_text))
+
+    # Photo/document handler (payment screenshots) - DM only
+    app.add_handler(MessageHandler(filters.PHOTO & private_filter, handle_photo))
+    app.add_handler(MessageHandler(filters.Document.ALL & private_filter, handle_document))
 
     # Add error handler
     app.add_error_handler(error_handler)
