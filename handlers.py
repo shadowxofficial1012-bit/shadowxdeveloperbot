@@ -914,6 +914,126 @@ async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def demo_upi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a demo UPI lookup result."""
+    from pdf_exporter import generate_upi_text_report, generate_upi_pdf
+    
+    demo_data = {
+        "number": "9876543210",
+        "upi_data": {
+            "upi": {
+                "vpa": "rahul.kumar@okicici",
+                "name": "Rahul Kumar",
+                "bank": "ICICI Bank",
+                "mcc": "0000",
+                "account_status": "Active",
+                "last_transaction": "2026-07-15 14:30:00"
+            },
+            "account": {
+                "account_holder": "Rahul Kumar",
+                "bank_name": "ICICI Bank",
+                "account_type": "Savings",
+                "ifsc": "ICIC0001234",
+                "branch": "Connaught Place, New Delhi"
+            },
+            "transaction": {
+                "total_transactions": "247",
+                "total_amount": "₹3,45,678",
+                "average_transaction": "₹1,399",
+                "last_30_days": "58 transactions"
+            }
+        }
+    }
+    
+    text_report = generate_upi_text_report(demo_data)
+    await update.message.reply_text(
+        f"<pre>{text_report}</pre>",
+        parse_mode="HTML",
+    )
+    
+    try:
+        pdf_buffer = generate_upi_pdf(demo_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename="DEMO_UPI_REPORT.pdf",
+            caption="📄 <b>Demo UPI Report</b>\nThis is how your UPI reports will look.",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"Demo UPI PDF failed: {e}")
+    
+    await update.message.reply_text(
+        "ℹ️ <b>That was a demo!</b>\n"
+        "Enter a real phone number to get actual UPI data.\n"
+        "Tap '💰 Buy Plan' to start.",
+        reply_markup=main_menu_keyboard(), 
+        parse_mode="HTML",
+    )
+
+
+async def demo_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a demo vehicle lookup result."""
+    from pdf_exporter import generate_vehicle_text_report, generate_vehicle_pdf
+    
+    demo_data = {
+        "vehicle_plate": "MH12AB1234",
+        "vehicle_data": {
+            "vehicle": {
+                "registration_number": "MH12AB1234",
+                "registration_date": "2020-05-15",
+                "vehicle_class": "Motor Car (LMV)",
+                "fuel_type": "Petrol",
+                "maker": "Maruti Suzuki",
+                "model": "Swift Dzire",
+                "color": "Pearl Arctic White",
+                "engine_number": "K12N***",
+                "chassis_number": "MA3FJ***"
+            },
+            "owner": {
+                "owner_name": "Rahul Kumar",
+                "father_name": "Suresh Kumar",
+                "present_address": "123 MG Road, Connaught Place, New Delhi, Delhi 110001",
+                "permanent_address": "456 Park Street, Mumbai, Maharashtra 400001",
+                "mobile_number": "+91-9876543210",
+                "ownership_count": 1
+            },
+            "tax": {
+                "tax_upto": "2027-03-31",
+                "tax_paid": "₹4,500",
+                "fitness_upto": "2027-05-15",
+                "insurance_upto": "2027-01-20"
+            }
+        }
+    }
+    
+    text_report = generate_vehicle_text_report(demo_data)
+    await update.message.reply_text(
+        f"<pre>{text_report}</pre>",
+        parse_mode="HTML",
+    )
+    
+    try:
+        pdf_buffer = generate_vehicle_pdf(demo_data)
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=pdf_buffer,
+            filename="DEMO_VEHICLE_REPORT.pdf",
+            caption="📄 <b>Demo Vehicle Report</b>\nThis is how your vehicle reports will look.",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"Demo Vehicle PDF failed: {e}")
+    
+    await update.message.reply_text(
+        "ℹ️ <b>That was a demo!</b>\n"
+        "Enter a real vehicle plate number to get actual data.\n"
+        "Tap '💰 Buy Plan' to start.",
+        reply_markup=main_menu_keyboard(), 
+        parse_mode="HTML",
+    )
+
+
 async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone number lookup with full code-formatted output."""
     user = update.effective_user

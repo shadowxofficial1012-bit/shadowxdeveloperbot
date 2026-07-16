@@ -22,6 +22,8 @@ from handlers import (
     handle_lookup,
     handle_screenshot,
     demo_result,
+    demo_upi,
+    demo_vehicle,
     handle_approve_command,
     handle_reject_command,
     check_user_channels,
@@ -259,6 +261,8 @@ def main():
     app.add_handler(CommandHandler("help", help_command, filters=private_filter))
     app.add_handler(CommandHandler("admin", admin_start, filters=private_filter))
     app.add_handler(CommandHandler("demo", demo_result, filters=private_filter))
+    app.add_handler(CommandHandler("demo_upi", demo_upi, filters=private_filter))
+    app.add_handler(CommandHandler("demo_vehicle", demo_vehicle, filters=private_filter))
     app.add_handler(CommandHandler("approve", handle_approve_command, filters=private_filter))
     app.add_handler(CommandHandler("reject", handle_reject_command, filters=private_filter))
     app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
