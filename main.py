@@ -25,7 +25,6 @@ from handlers import (
     handle_approve_command,
     handle_reject_command,
     check_user_channels,
-    handle_num_lookup,
     handle_upi_lookup,
     handle_vehicle_lookup,
 )
@@ -99,36 +98,21 @@ async def handle_text(update: Update, context):
     if text == "📱 Phone Lookup":
         # Clear any previous awaiting state
         context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_num", None)
         context.user_data.pop("awaiting_upi", None)
         context.user_data.pop("awaiting_vehicle", None)
         await update.message.reply_text(
             "🔍 <b>Enter Phone Number:</b>\n\n"
             "Type the 10-digit phone number:\n"
             "Example: <code>9876543210</code>\n\n"
+            "Returns name, address, SIM details, leak data & more.\n\n"
             "💡 Or tap any button to cancel.",
             parse_mode="HTML",
         )
         context.user_data["awaiting_number"] = True
         return
 
-    if text == "🔍 Num Leak":
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_upi", None)
-        context.user_data.pop("awaiting_vehicle", None)
-        await update.message.reply_text(
-            "🔍 <b>Enter Phone Number for Leak Lookup:</b>\n\n"
-            "Type the 10-digit phone number:\n"
-            "Example: <code>9876543210</code>\n\n"
-            "💡 Or tap any button to cancel.",
-            parse_mode="HTML",
-        )
-        context.user_data["awaiting_num"] = True
-        return
-
     if text == "💳 UPI Lookup":
         context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_num", None)
         context.user_data.pop("awaiting_vehicle", None)
         await update.message.reply_text(
             "💳 <b>Enter Phone Number for UPI Lookup:</b>\n\n"
@@ -142,7 +126,6 @@ async def handle_text(update: Update, context):
 
     if text == "🚗 Vehicle Lookup":
         context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_num", None)
         context.user_data.pop("awaiting_upi", None)
         await update.message.reply_text(
             "🚗 <b>Enter Vehicle Registration Number:</b>\n\n"
@@ -165,7 +148,6 @@ async def handle_text(update: Update, context):
     if text in routes:
         # Clear all awaiting states when other buttons are pressed
         context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_num", None)
         context.user_data.pop("awaiting_upi", None)
         context.user_data.pop("awaiting_vehicle", None)
         route = routes[text]
@@ -195,7 +177,6 @@ async def handle_text(update: Update, context):
 
     if text in admin_routes and update.effective_user.id in ADMIN_IDS:
         context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_num", None)
         context.user_data.pop("awaiting_upi", None)
         context.user_data.pop("awaiting_vehicle", None)
         await admin_routes[text](update, context)
@@ -224,14 +205,6 @@ async def handle_text(update: Update, context):
         context.user_data.pop("awaiting_number", None)
         # Channel check happens inside handle_lookup
         await handle_lookup(update, context)
-        return
-
-    # If awaiting number for num leak lookup
-    if context.user_data.get("awaiting_num"):
-        context.user_data.pop("awaiting_num", None)
-        # Override args so handler can process from message text
-        context.args = [text]
-        await handle_num_lookup(update, context)
         return
 
     # If awaiting number for UPI lookup
@@ -286,7 +259,6 @@ def main():
     app.add_handler(CommandHandler("demo", demo_result, filters=private_filter))
     app.add_handler(CommandHandler("approve", handle_approve_command, filters=private_filter))
     app.add_handler(CommandHandler("reject", handle_reject_command, filters=private_filter))
-    app.add_handler(CommandHandler("num", handle_num_lookup, filters=private_filter))
     app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
     app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
 

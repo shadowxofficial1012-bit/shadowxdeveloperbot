@@ -10,9 +10,9 @@ from config import SUBSCRIPTION_PACKAGES, REQUIRED_CHANNELS
 def main_menu_keyboard():
     """Main menu reply keyboard matching the screenshot design."""
     keyboard = [
-        [KeyboardButton("📱 Phone Lookup"), KeyboardButton("🔍 Num Leak"), KeyboardButton("💰 Buy Plan")],
-        [KeyboardButton("💳 UPI Lookup"), KeyboardButton("🚗 Vehicle Lookup"), KeyboardButton("❓ Help Guide")],
-        [KeyboardButton("🎁 Redeem Code"), KeyboardButton("🤳 Contact Admin"), KeyboardButton("🔧 Admin Panel")],
+        [KeyboardButton("📱 Phone Lookup"), KeyboardButton("💰 Buy Plan"), KeyboardButton("💳 UPI Lookup")],
+        [KeyboardButton("🚗 Vehicle Lookup"), KeyboardButton("❓ Help Guide"), KeyboardButton("🎁 Redeem Code")],
+        [KeyboardButton("🤳 Contact Admin"), KeyboardButton("🔧 Admin Panel")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
