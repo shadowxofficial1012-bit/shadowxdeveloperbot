@@ -1,6 +1,8 @@
-name = "telegram-osint-bot"
-main = "worker.js"
-compatibility_date = "2024-01-01"
+# name = "telegram-osint-bot"
+# Renamed to prevent Railway auto-detecting and running 'npx wrangler deploy'
+# Deploy this worker separately via Cloudflare Dashboard
+# main = "worker.js"
+# compatibility_date = "2024-01-01"
 
 # No special permissions needed for this worker
 # It only makes outbound fetch requests
