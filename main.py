@@ -38,6 +38,7 @@ from admin import (
     admin_view_codes,
     admin_total_users,
     admin_lookup_history,
+    admin_broadcast,
     handle_admin_text,
 )
 
@@ -172,6 +173,7 @@ async def handle_text(update: Update, context):
         "👤 Check User": admin_check_user,
         "🎁 Create Code": admin_create_code,
         "📋 View All Codes": admin_view_codes,
+        "📢 Broadcast": admin_broadcast,
         "🏠 Main Menu": admin_start,
     }
 

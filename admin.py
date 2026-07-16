@@ -1,7 +1,9 @@
 import logging
+import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 
 import database as db
 from keyboards import admin_keyboard, admin_approve_keyboard, main_menu_keyboard
@@ -19,6 +21,10 @@ async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("🚫 <b>Access Denied.</b>", parse_mode="HTML")
         return
+
+    # Clear any pending admin action
+    context.user_data.pop("admin_action", None)
+    context.user_data.pop("broadcast_pending", None)
 
     stats = db.get_stats()
     code_stats = db.get_redeem_code_stats()
@@ -190,6 +196,65 @@ async def admin_view_codes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
 
 
+async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 📢 Broadcast button - ask admin to send the message."""
+    if not is_admin(update.effective_user.id):
+        return
+    context.user_data["admin_action"] = "broadcast"
+    context.user_data["broadcast_pending"] = True
+    await update.message.reply_text(
+        "📢 <b>Broadcast Message</b>\n\n"
+        "Send the message you want to broadcast to all users.\n\n"
+        "⚠️ This will be sent to <b>every user</b> in the bot.\n"
+        "Supports HTML formatting.\n\n"
+        "💡 Or tap <b>🏠 Main Menu</b> to cancel.",
+        reply_markup=admin_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+async def _execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str):
+    """Send broadcast message to all users."""
+    users = db.get_all_users()
+    total = len(users)
+    success = 0
+    failed = 0
+
+    status_msg = await update.message.reply_text(
+        f"📢 <b>Broadcasting to {total} users...</b>\n"
+        "Please wait."
+        , parse_mode="HTML"
+    )
+
+    for user in users:
+        uid = user["user_id"]
+        try:
+            await context.bot.send_message(
+                chat_id=uid,
+                text=message_text,
+                parse_mode="HTML",
+            )
+            success += 1
+            # Small delay to avoid Telegram rate limits
+            await asyncio.sleep(0.05)
+        except BadRequest:
+            failed += 1
+        except Exception as e:
+            logger.warning(f"Broadcast to {uid} failed: {e}")
+            failed += 1
+
+    result = (
+        f"📢 <b>Broadcast Complete!</b>\n\n"
+        f"✅ <b>Sent:</b> {success}\n"
+        f"❌ <b>Failed:</b> {failed}\n"
+        f"📊 <b>Total:</b> {total}"
+    )
+    try:
+        await status_msg.edit_text(result, parse_mode="HTML")
+    except BadRequest:
+        await update.message.reply_text(result, parse_mode="HTML")
+
+
 async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages when admin is in an action state."""
     if not is_admin(update.effective_user.id):
@@ -206,7 +271,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👥 Total Users", "🔍 Lookup History",
         "✅ Activate Plan", "💳 Add Credits",
         "👤 Check User", "🎁 Create Code",
-        "📋 View All Codes", "🏠 Main Menu",
+        "📋 View All Codes", "📢 Broadcast", "🏠 Main Menu",
     )
     if text in admin_button_texts:
         context.user_data["admin_action"] = None
@@ -215,9 +280,17 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Back to admin panel
     if text in ("🏠 Main Menu", "⬅️ Back"):
         context.user_data["admin_action"] = None
+        context.user_data.pop("broadcast_pending", None)
         await update.message.reply_text(
             "🔧 <b>Admin Panel</b>", reply_markup=admin_keyboard(), parse_mode="HTML"
         )
+        return True
+
+    # Broadcast: admin is sending the broadcast message
+    if context.user_data.get("broadcast_pending"):
+        context.user_data.pop("broadcast_pending", None)
+        context.user_data["admin_action"] = None
+        await _execute_broadcast(update, context, text)
         return True
 
     # Activate Plan / Add Credits (same logic)

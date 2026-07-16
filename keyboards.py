@@ -23,7 +23,8 @@ def admin_keyboard():
         [KeyboardButton("👥 Total Users"), KeyboardButton("🔍 Lookup History")],
         [KeyboardButton("✅ Activate Plan"), KeyboardButton("💳 Add Credits")],
         [KeyboardButton("👤 Check User"), KeyboardButton("🎁 Create Code")],
-        [KeyboardButton("📋 View All Codes"), KeyboardButton("🏠 Main Menu")],
+        [KeyboardButton("📋 View All Codes"), KeyboardButton("📢 Broadcast")],
+        [KeyboardButton("🏠 Main Menu")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
