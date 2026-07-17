@@ -1022,7 +1022,8 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
     technical = vehicle_data.get("technical", {})
 
     # Flat API response support (actual API: regNo, owner, vehicle, etc.)
-    if not owner and not vehicle:
+    # Need to check isinstance because normalization may leave owner/vehicle as strings
+    if not isinstance(owner, dict) or not isinstance(vehicle, dict):
         if vehicle_data.get("regNo") or vehicle_data.get("owner"):
             owner = {
                 "name": vehicle_data.get("owner"),
@@ -1107,8 +1108,12 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
         pdf.ln(2)
         pdf.divider()
 
-    # Fallback: print all data
-    if not (owner and any(v for v in owner.values() if isinstance(v, str))) and not (vehicle and any(v for v in vehicle.values() if isinstance(v, str))):
+    # Fallback: print all data (only if no data was displayed via sections above)
+    owner_has_data = isinstance(owner, dict) and any(v for v in owner.values() if isinstance(v, str) and v)
+    vehicle_has_data = isinstance(vehicle, dict) and any(v for v in vehicle.values() if isinstance(v, str) and v)
+    insurance_has_data = isinstance(insurance, dict) and any(v for v in insurance.values() if isinstance(v, str) and v)
+    technical_has_data = isinstance(technical, dict) and any(v for v in technical.values() if isinstance(v, str) and v)
+    if not owner_has_data and not vehicle_has_data and not insurance_has_data and not technical_has_data:
         pdf.section_header("VEHICLE DATA", NEON_CYAN)
         for key, value in vehicle_data.items():
             if key == "data":
