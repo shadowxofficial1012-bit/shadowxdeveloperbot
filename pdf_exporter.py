@@ -305,7 +305,7 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
 
 
 def generate_text_report(data: dict) -> str:
-    """Generate a clean emoji-style text report for phone/numleak lookup."""
+    """Generate a text report showing ALL available phone lookup data."""
     number = data.get("number", "N/A")
     number_data = data.get("number_data", {})
     numleak_data = data.get("numleak_data", {})
@@ -318,86 +318,135 @@ def generate_text_report(data: dict) -> str:
     lines.append(f"📞 Number: {number}")
     lines.append("")
 
-    # Number data records
+    # === NUMBER DATA RECORDS ===
     results = number_data.get("results", [])
     if results:
         for i, record in enumerate(results[:5], 1):
             lines.append(f"━━ Record #{i} ━━")
-            name = safe_str(record.get("name"))
-            if name: lines.append(f"👤 Name: {name}")
-            fname = safe_str(record.get("fname"))
-            if fname and fname != "N/A": lines.append(f"👨 Father: {fname}")
-            mobile = safe_str(record.get("mobile"))
-            if mobile: lines.append(f"📞 Phone: {mobile}")
-            alt = safe_str(record.get("alt"))
-            if alt and alt != "N/A": lines.append(f"📱 Alt: {alt}")
-            email = safe_str(record.get("email"))
-            if email and email != "N/A": lines.append(f"✉️ Email: {email}")
-            circle = safe_str(record.get("circle"))
-            if circle and circle != "N/A": lines.append(f"📎 Circle: {circle}")
-            addr = safe_str(record.get("address"))
-            if addr and addr != "N/A": lines.append(f"📍 Address: {addr}")
-            rid = safe_str(record.get("id"))
-            if rid and rid != "N/A": lines.append(f"🔢 ID: {rid}")
+            # Show ALL fields from the record
+            if record.get("name"): lines.append(f"👤 Name: {safe_str(record.get('name'))}")
+            if record.get("fname"): lines.append(f"👨 Father: {safe_str(record.get('fname'))}")
+            if record.get("mobile"): lines.append(f"📞 Phone: {safe_str(record.get('mobile'))}")
+            if record.get("alt"): lines.append(f"📱 Alt: {safe_str(record.get('alt'))}")
+            if record.get("email"): lines.append(f"✉️ Email: {safe_str(record.get('email'))}")
+            if record.get("circle"): lines.append(f"📎 Circle: {safe_str(record.get('circle'))}")
+            if record.get("operator"): lines.append(f"📡 Operator: {safe_str(record.get('operator'))}")
+            if record.get("state"): lines.append(f"🗺 State: {safe_str(record.get('state'))}")
+            if record.get("address"): lines.append(f"📍 Address: {safe_str(record.get('address'))}")
+            if record.get("id"): lines.append(f"🔢 ID: {safe_str(record.get('id'))}")
+            # Show any other fields we might have missed
+            for key, value in record.items():
+                if key in ["name","fname","mobile","alt","email","circle","operator","state","address","id"]:
+                    continue
+                if value and str(value) not in ["", "N/A", "None"]:
+                    lines.append(f"🔹 {key.replace('_',' ').title()}: {safe_str(value)}")
             lines.append("")
 
         if len(results) > 5:
             lines.append(f"... and {len(results) - 5} more records")
             lines.append("")
 
-    # Numleak chain data
+    # === LEAK DATA ===
     chain = numleak_data.get("chain", {})
     if chain:
         lines.append("━━ LEAK DATA ━━")
-        title = safe_str(chain.get("title"))
-        if title: lines.append(f"📛 Source: {title}")
+        if chain.get("title"): lines.append(f"📛 Source: {safe_str(chain.get('title'))}")
         desc = safe_str(chain.get("description", ""))[:120]
         if desc and desc != "N/A": lines.append(f"📝 Info: {desc}")
         lines.append("")
 
         leak_records = chain.get("records", [])
-        for i, record in enumerate(leak_records[:5], 1):
+        for i, record in enumerate(leak_records[:10], 1):
             lines.append(f"━━ Leak Record #{i} ━━")
-            full_name = safe_str(record.get("FullName"))
-            if full_name and full_name != "N/A": lines.append(f"👤 Name: {full_name}")
-            father = safe_str(record.get("FatherName"))
-            if father and father != "N/A": lines.append(f"👨 Father: {father}")
-            phone = safe_str(record.get("Phone"))
-            if phone and phone != "N/A": lines.append(f"📞 Phone: {phone}")
-            phone2 = safe_str(record.get("Phone2"))
-            if phone2 and phone2 != "N/A": lines.append(f"📱 Alt: {phone2}")
-            doc_id = safe_str(record.get("DocumentNumber"))
-            if doc_id and doc_id != "N/A": lines.append(f"🆔 Doc ID: {doc_id}")
-            adres = safe_str(record.get("Adres"))[:80]
-            if adres and adres != "N/A": lines.append(f"📍 Address: {adres}")
-            region = safe_str(record.get("Region"))
-            if region and region != "N/A": lines.append(f"🗺 Region: {region}")
+            if record.get("FullName"): lines.append(f"👤 Name: {safe_str(record.get('FullName'))}")
+            if record.get("FatherName"): lines.append(f"👨 Father: {safe_str(record.get('FatherName'))}")
+            if record.get("Phone"): lines.append(f"📞 Phone: {safe_str(record.get('Phone'))}")
+            if record.get("Phone2"): lines.append(f"📱 Alt: {safe_str(record.get('Phone2'))}")
+            if record.get("Phone3"): lines.append(f"📱 Alt2: {safe_str(record.get('Phone3'))}")
+            if record.get("DocumentNumber"): lines.append(f"🆔 Doc ID: {safe_str(record.get('DocumentNumber'))}")
+            if record.get("Adres"): lines.append(f"📍 Address: {safe_str(record.get('Adres'))[:80]}")
+            if record.get("Region"): lines.append(f"🗺 Region: {safe_str(record.get('Region'))}")
+            # Show any other fields
+            for key, value in record.items():
+                if key in ["FullName","FatherName","Phone","Phone2","Phone3","DocumentNumber","Adres","Region"]:
+                    continue
+                if value and str(value) not in ["", "N/A", "None"]:
+                    lines.append(f"🔹 {key.replace('_',' ').title()}: {safe_str(value)}")
             lines.append("")
 
-        if len(leak_records) > 5:
-            lines.append(f"... and {len(leak_records) - 5} more records")
+        if len(leak_records) > 10:
+            lines.append(f"... and {len(leak_records) - 10} more records")
             lines.append("")
 
-    # Calltracer data
+    # === SIM / CALLTRACER DATA - ALL FIELDS ===
     calltracer = numleak_data.get("calltracer", {})
     if calltracer:
         lines.append("━━ SIM INFO ━━")
-        number_val = safe_str(calltracer.get("Number"))
-        if number_val and number_val != "N/A": lines.append(f"📞 Number: {number_val}")
-        sim = safe_str(calltracer.get("SIM card"))
-        if sim and sim != "N/A": lines.append(f"💳 SIM: {sim}")
-        state = safe_str(calltracer.get("Mobile State"))
-        if state and state != "N/A": lines.append(f"🗺 State: {state}")
-        conn = safe_str(calltracer.get("Connection"))
-        if conn and conn != "N/A": lines.append(f"🔗 Connection: {conn}")
-        hometown = safe_str(calltracer.get("Hometown"))
-        if hometown and hometown != "N/A": lines.append(f"🏠 Hometown: {hometown}")
-        lang = safe_str(calltracer.get("Language"))
-        if lang and lang != "N/A": lines.append(f"🗣 Language: {lang}")
-        imei = safe_str(calltracer.get("IMEI number"))
-        if imei and imei != "N/A": lines.append(f"🔢 IMEI: {imei}")
-        tracking = safe_str(calltracer.get("Tracking History"))
-        if tracking and tracking != "N/A": lines.append(f"📍 Tracking: {tracking}")
+        mapped = set()
+        # Core fields
+        if calltracer.get("Number"): 
+            lines.append(f"📞 Number: {safe_str(calltracer.get('Number'))}")
+            mapped.add("Number")
+        if calltracer.get("SIM card") or calltracer.get("SIM"): 
+            v = calltracer.get("SIM card") or calltracer.get("SIM")
+            lines.append(f"💳 SIM: {safe_str(v)}")
+            mapped.update(["SIM card","SIM"])
+        if calltracer.get("Mobile State") or calltracer.get("state"): 
+            v = calltracer.get("Mobile State") or calltracer.get("state")
+            lines.append(f"🗺 State: {safe_str(v)}")
+            mapped.update(["Mobile State","state"])
+        if calltracer.get("Connection") or calltracer.get("connection"): 
+            v = calltracer.get("Connection") or calltracer.get("connection")
+            lines.append(f"🔗 Connection: {safe_str(v)}")
+            mapped.update(["Connection","connection"])
+        if calltracer.get("Hometown") or calltracer.get("hometown"): 
+            v = calltracer.get("Hometown") or calltracer.get("hometown")
+            lines.append(f"🏠 Hometown: {safe_str(v)}")
+            mapped.update(["Hometown","hometown"])
+        if calltracer.get("Language") or calltracer.get("language"):
+            v = calltracer.get("Language") or calltracer.get("language") 
+            lines.append(f"🗣 Language: {safe_str(v)}")
+            mapped.update(["Language","language"])
+        if calltracer.get("IMEI number") or calltracer.get("imei"):
+            v = calltracer.get("IMEI number") or calltracer.get("imei")
+            lines.append(f"🔢 IMEI: {safe_str(v)}")
+            mapped.update(["IMEI number","imei"])
+        if calltracer.get("MAC address") or calltracer.get("mac"):
+            v = calltracer.get("MAC address") or calltracer.get("mac")
+            lines.append(f"💻 MAC: {safe_str(v)}")
+            mapped.update(["MAC address","mac"])
+        if calltracer.get("IP address") or calltracer.get("ip"):
+            v = calltracer.get("IP address") or calltracer.get("ip")
+            lines.append(f"🌐 IP: {safe_str(v)}")
+            mapped.update(["IP address","ip"])
+        if calltracer.get("Owner Address"):
+            lines.append(f"👤 Owner Addr: {safe_str(calltracer.get('Owner Address'))[:80]}")
+            mapped.add("Owner Address")
+        if calltracer.get("Refrence City") or calltracer.get("reference_city"):
+            v = calltracer.get("Refrence City") or calltracer.get("reference_city")
+            lines.append(f"🏙 City: {safe_str(v)}")
+            mapped.update(["Refrence City","reference_city"])
+        if calltracer.get("Mobile Locations"):
+            lines.append(f"📍 Mobile Locs: {safe_str(calltracer.get('Mobile Locations'))[:80]}")
+            mapped.add("Mobile Locations")
+        if calltracer.get("Tower Locations"):
+            lines.append(f"📡 Tower Locs: {safe_str(calltracer.get('Tower Locations'))[:80]}")
+            mapped.add("Tower Locations")
+        if calltracer.get("Tracking History"):
+            lines.append(f"📍 Tracking: {safe_str(calltracer.get('Tracking History'))}")
+            mapped.add("Tracking History")
+        if calltracer.get("Helpline"):
+            lines.append(f"📞 Helpline: {safe_str(calltracer.get('Helpline'))}")
+            mapped.add("Helpline")
+        if calltracer.get("info"):
+            lines.append(f"ℹ️ Info: {safe_str(calltracer.get('info'))}")
+            mapped.add("info")
+        # Show any OTHER calltracer fields we haven't covered
+        for key, value in calltracer.items():
+            if key in mapped:
+                continue
+            if value and str(value) not in ["", "N/A", "None"]:
+                lines.append(f"🔹 {key.replace('_',' ').title()}: {safe_str(value)}")
         lines.append("")
 
     if not results and not chain and not calltracer:
@@ -406,6 +455,7 @@ def generate_text_report(data: dict) -> str:
 
     lines.append("⚡ Powered by Hathi OSINT")
     return "\n".join(lines)
+
 
 
 
