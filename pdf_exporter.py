@@ -1006,39 +1006,36 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
     insurance = vehicle_data.get("insurance", {})
     technical = vehicle_data.get("technical", {})
 
-    # Flat response fallback
+    # Flat API response support (actual API: regNo, owner, vehicle, etc.)
     if not owner and not vehicle:
-        owner = {
-            "name": vehicle_data.get("owner_name") or vehicle_data.get("name"),
-            "father_name": vehicle_data.get("father_name") or vehicle_data.get("fname"),
-            "address": vehicle_data.get("owner_address") or vehicle_data.get("address"),
-        }
-        vehicle = {
-            "registration_number": vehicle_data.get("registration_number") or vehicle_data.get("reg_no"),
-            "maker": vehicle_data.get("maker") or vehicle_data.get("company"),
-            "model": vehicle_data.get("model"),
-            "color": vehicle_data.get("color"),
-            "fuel_type": vehicle_data.get("fuel_type") or vehicle_data.get("fuel"),
-            "seating_capacity": vehicle_data.get("seating_capacity") or vehicle_data.get("seats"),
-            "vehicle_class": vehicle_data.get("vehicle_class") or vehicle_data.get("category"),
-            "registration_date": vehicle_data.get("registration_date") or vehicle_data.get("reg_date"),
-            "fitness_upto": vehicle_data.get("fitness_upto"),
-            "tax_upto": vehicle_data.get("tax_upto"),
-        }
-        insurance = {
-            "policy_number": vehicle_data.get("policy_number"),
-            "insurance_upto": vehicle_data.get("insurance_upto"),
-            "insurer": vehicle_data.get("insurer") or vehicle_data.get("insurance_company"),
-        }
-        technical = {
-            "chassis_number": vehicle_data.get("chassis_number") or vehicle_data.get("chassis"),
-            "engine_number": vehicle_data.get("engine_number") or vehicle_data.get("engine"),
-            "engine_capacity": vehicle_data.get("engine_capacity"),
-            "norms_type": vehicle_data.get("norms_type"),
-            "financier": vehicle_data.get("financier"),
-            "mv_tax_upto": vehicle_data.get("mv_tax_upto"),
-        }
-
+        if vehicle_data.get("regNo") or vehicle_data.get("owner"):
+            owner = {
+                "name": vehicle_data.get("owner"),
+                "father_name": vehicle_data.get("fatherName"),
+                "mobile": vehicle_data.get("mobileNumber"),
+                "address": vehicle_data.get("presentAddress"),
+            }
+            vehicle = {
+                "reg_no": vehicle_data.get("regNo"),
+                "vehicle": vehicle_data.get("vehicle"),
+                "manufacturer": vehicle_data.get("manufacturer"),
+                "variant": vehicle_data.get("variant"),
+                "fuel_type": vehicle_data.get("fuelType"),
+                "color": vehicle_data.get("color"),
+                "class": vehicle_data.get("vehicleClass"),
+                "mfg_year": vehicle_data.get("manufacturerYear"),
+            }
+            insurance = {
+                "insurer": vehicle_data.get("insuranceCompanyName"),
+                "insurance_upto": vehicle_data.get("insuranceUpto"),
+            }
+            technical = {
+                "chassis_no": vehicle_data.get("chassisNumber"),
+                "engine_no": vehicle_data.get("engineNumber"),
+                "engine_cc": vehicle_data.get("cubicCapacity"),
+                "tax_upto": vehicle_data.get("mvTaxUpto"),
+                "fitness_upto": vehicle_data.get("fitnessUpto"),
+            }
     # OWNER section
     if owner:
         pdf.section_header("OWNER DETAILS", NEON_GREEN)
