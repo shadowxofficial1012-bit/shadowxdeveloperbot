@@ -32,3 +32,7 @@ Thumbs.db
 
 # Windows reserved
 nul
+
+# Cloudflare Workers config (deployed separately)
+wrangler.toml
+relay/wrangler.toml
