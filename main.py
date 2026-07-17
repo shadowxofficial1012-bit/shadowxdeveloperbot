@@ -251,7 +251,7 @@ def main():
     db.init_db()
     print("✅ Database initialized")
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).read_timeout(10).connect_timeout(10).build()
 
     # Only respond in private chats (DMs) - ignore all group messages/commands
     private_filter = filters.ChatType.PRIVATE
@@ -289,8 +289,6 @@ def main():
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
         poll_interval=2.0,
-        read_timeout=10,
-        connect_timeout=10,
     )
 
 

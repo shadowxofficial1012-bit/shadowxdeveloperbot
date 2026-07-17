@@ -117,7 +117,7 @@ def _process_response(resp) -> dict:
         return {"success": False, "error": f"HTTP {resp.status_code}"}
 
 
-def _fetch_with_fallback(url: str, params: dict, timeout: int = 8) -> dict:
+def _fetch_with_fallback(url: str, params: dict, timeout: int = 3) -> dict:
     """Fetch data, trying relay first if configured, then falling back to direct."""
     # Try relay first
     relay_result = _try_relay(url, params, timeout)
@@ -129,30 +129,30 @@ def _fetch_with_fallback(url: str, params: dict, timeout: int = 8) -> dict:
     return _try_direct(url, params, timeout)
 
 
-async def _fetch_fast(url: str, params: dict, timeout: int = 8) -> dict:
+async def _fetch_fast(url: str, params: dict, timeout: int = 3) -> dict:
     """Fetch data with relay-then-direct fallback."""
     return await asyncio.to_thread(_fetch_with_fallback, url, params, timeout=timeout)
 
 
-async def lookup_number(number: str, timeout: int = 8) -> dict:
+async def lookup_number(number: str, timeout: int = 3) -> dict:
     """Fetch phone number details (name, address, SIM etc) from the /api/number endpoint."""
     params = {"key": OSINT_API_KEY, "num": number}
     return await _fetch_fast(OSINT_API_NUMBER_URL, params, timeout=timeout)
 
 
-async def lookup_numleak(number: str, timeout: int = 8) -> dict:
+async def lookup_numleak(number: str, timeout: int = 3) -> dict:
     """Fetch phone number leak data from the /api/numleak endpoint."""
     params = {"key": OSINT_API_KEY, "num": number}
     return await _fetch_fast(OSINT_API_NUMLEAK_URL, params, timeout=timeout)
 
 
-async def lookup_numtoupi(number: str, timeout: int = 8) -> dict:
+async def lookup_numtoupi(number: str, timeout: int = 3) -> dict:
     """Fetch UPI details linked to a phone number from the /api/numtoupi endpoint."""
     params = {"key": OSINT_API_KEY, "num": number}
     return await _fetch_fast(OSINT_API_NUMTOUPI_URL, params, timeout=timeout)
 
 
-async def lookup_vehicle(plate: str, timeout: int = 8) -> dict:
+async def lookup_vehicle(plate: str, timeout: int = 3) -> dict:
     """Fetch vehicle registration details from the vehicle API endpoint."""
     params = {"vehicle": plate}
     return await _fetch_fast(OSINT_API_VEHICLE_URL, params, timeout=timeout)

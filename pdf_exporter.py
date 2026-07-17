@@ -496,8 +496,9 @@ def generate_upi_text_report(data: dict) -> str:
 
     # Handle flat vs nested response format
     flat_fields = {}
-    accounts = upi_data.get("accounts", []) or (upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else [])
-    transactions = upi_data.get("transactions", []) or (upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else [])
+    # Check nested data.accounts FIRST, then top-level accounts
+    accounts = (upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else []) or upi_data.get("accounts", [])
+    transactions = (upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else []) or upi_data.get("transactions", [])
 
     # Collect all flat fields
     for d in [upi_data, upi_data.get("data", {}) if isinstance(upi_data.get("data"), dict) else {}]:
