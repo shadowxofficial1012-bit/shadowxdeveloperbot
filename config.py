@@ -13,9 +13,8 @@ OSINT_API_NUMTOUPI_URL = os.getenv("OSINT_API_NUMTOUPI_URL", "https://ft-osint-a
 OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://vh-num.vercel.app/fetch")
 OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
 
-# Optional API relay/proxy URL (set this if Railway blocks direct API access)
-# Example: "https://your-relay.workers.dev/proxy" or "http://your-vps:8080/proxy"
-API_RELAY_URL = os.getenv("API_RELAY_URL", "https://osint-api-relay.shadowgamer543254.workers.dev/proxy")
+# API relay disabled - making direct API calls from Railway
+API_RELAY_URL = ""
 
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")
