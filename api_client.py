@@ -109,5 +109,5 @@ async def lookup_numtoupi(number: str, timeout: int = 8) -> dict:
 
 async def lookup_vehicle(plate: str, timeout: int = 8) -> dict:
     """Fetch vehicle registration details from the vehicle API endpoint."""
-    params = {"key": OSINT_API_KEY, "vehicle": plate, "reg_no": plate}
+    params = {"vehicle": plate}
     return await _fetch_fast(OSINT_API_VEHICLE_URL, params, timeout=timeout)
