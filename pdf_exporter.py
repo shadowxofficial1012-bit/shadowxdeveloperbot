@@ -305,7 +305,7 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
 
 
 def generate_text_report(data: dict) -> str:
-    """Generate a hacker-style monospace text report."""
+    """Generate a clean emoji-style text report for phone/numleak lookup."""
     number = data.get("number", "N/A")
     number_data = data.get("number_data", {})
     numleak_data = data.get("numleak_data", {})
@@ -313,102 +313,100 @@ def generate_text_report(data: dict) -> str:
     lines = []
 
     # Header
-    lines.append("╔══════════════════════════════════════════════════╗")
-    lines.append("║       MOBILE_INFO INTELLIGENCE REPORT           ║")
-    lines.append("╚══════════════════════════════════════════════════╝")
-    lines.append(f"  Target: {number}")
+    lines.append("📱 Phone Lookup Result")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"📞 Number: {number}")
     lines.append("")
 
     # Number data records
     results = number_data.get("results", [])
     if results:
         for i, record in enumerate(results[:5], 1):
-            lines.append(f"  ┌── RECORD #{i} ──")
-            lines.append(f"  │ OWNER NAME     : {safe_str(record.get('name'))}")
-            lines.append(f"  │ FATHER NAME    : {safe_str(record.get('fname'))}")
-            lines.append(f"  │ MOBILE NO      : {safe_str(record.get('mobile'))}")
-            if record.get("alt") and record["alt"] != "N/A":
-                lines.append(f"  │ ALT MOBILE     : {safe_str(record.get('alt'))}")
-            if record.get("email") and record["email"] != "N/A":
-                lines.append(f"  │ EMAIL          : {safe_str(record.get('email'))}")
-            lines.append(f"  │ CIRCLE         : {safe_str(record.get('circle'))}")
-            lines.append(f"  │ ADDRESS        : {safe_str(record.get('address'))}")
-            lines.append(f"  │ RECORD ID      : {safe_str(record.get('id'))}")
-            lines.append(f"  └{'─' * 40}")
+            lines.append(f"━━ Record #{i} ━━")
+            name = safe_str(record.get("name"))
+            if name: lines.append(f"👤 Name: {name}")
+            fname = safe_str(record.get("fname"))
+            if fname and fname != "N/A": lines.append(f"👨 Father: {fname}")
+            mobile = safe_str(record.get("mobile"))
+            if mobile: lines.append(f"📞 Phone: {mobile}")
+            alt = safe_str(record.get("alt"))
+            if alt and alt != "N/A": lines.append(f"📱 Alt: {alt}")
+            email = safe_str(record.get("email"))
+            if email and email != "N/A": lines.append(f"✉️ Email: {email}")
+            circle = safe_str(record.get("circle"))
+            if circle and circle != "N/A": lines.append(f"📎 Circle: {circle}")
+            addr = safe_str(record.get("address"))
+            if addr and addr != "N/A": lines.append(f"📍 Address: {addr}")
+            rid = safe_str(record.get("id"))
+            if rid and rid != "N/A": lines.append(f"🔢 ID: {rid}")
             lines.append("")
 
         if len(results) > 5:
-            lines.append(f"  ... and {len(results) - 5} more records")
+            lines.append(f"... and {len(results) - 5} more records")
             lines.append("")
 
     # Numleak chain data
     chain = numleak_data.get("chain", {})
     if chain:
-        lines.append("=" * 50)
-        lines.append("  DATA LEAK DETAILS")
-        lines.append("-" * 50)
-        lines.append(f"  TITLE          : {safe_str(chain.get('title'))}")
-        lines.append(f"  DESCRIPTION    : {safe_str(chain.get('description', ''))[:100]}")
+        lines.append("━━ LEAK DATA ━━")
+        title = safe_str(chain.get("title"))
+        if title: lines.append(f"📛 Source: {title}")
+        desc = safe_str(chain.get("description", ""))[:120]
+        if desc and desc != "N/A": lines.append(f"📝 Info: {desc}")
         lines.append("")
 
         leak_records = chain.get("records", [])
         for i, record in enumerate(leak_records[:5], 1):
-            lines.append(f"  ┌── LEAK RECORD #{i} ──")
-            lines.append(f"  │ FULL NAME      : {safe_str(record.get('FullName'))}")
-            lines.append(f"  │ FATHER NAME    : {safe_str(record.get('FatherName'))}")
-            lines.append(f"  │ PHONE          : {safe_str(record.get('Phone'))}")
-            if record.get("Phone2"):
-                lines.append(f"  │ PHONE 2        : {safe_str(record.get('Phone2'))}")
-            if record.get("Phone3"):
-                lines.append(f"  │ PHONE 3        : {safe_str(record.get('Phone3'))}")
-            lines.append(f"  │ DOC ID         : {safe_str(record.get('DocumentNumber'))}")
-            lines.append(f"  │ ADDRESS        : {safe_str(record.get('Adres'))[:80]}")
-            lines.append(f"  │ REGION         : {safe_str(record.get('Region'))}")
-            lines.append(f"  └{'─' * 40}")
+            lines.append(f"━━ Leak Record #{i} ━━")
+            full_name = safe_str(record.get("FullName"))
+            if full_name and full_name != "N/A": lines.append(f"👤 Name: {full_name}")
+            father = safe_str(record.get("FatherName"))
+            if father and father != "N/A": lines.append(f"👨 Father: {father}")
+            phone = safe_str(record.get("Phone"))
+            if phone and phone != "N/A": lines.append(f"📞 Phone: {phone}")
+            phone2 = safe_str(record.get("Phone2"))
+            if phone2 and phone2 != "N/A": lines.append(f"📱 Alt: {phone2}")
+            doc_id = safe_str(record.get("DocumentNumber"))
+            if doc_id and doc_id != "N/A": lines.append(f"🆔 Doc ID: {doc_id}")
+            adres = safe_str(record.get("Adres"))[:80]
+            if adres and adres != "N/A": lines.append(f"📍 Address: {adres}")
+            region = safe_str(record.get("Region"))
+            if region and region != "N/A": lines.append(f"🗺 Region: {region}")
             lines.append("")
 
         if len(leak_records) > 5:
-            lines.append(f"  ... and {len(leak_records) - 5} more records")
+            lines.append(f"... and {len(leak_records) - 5} more records")
             lines.append("")
 
     # Calltracer data
     calltracer = numleak_data.get("calltracer", {})
     if calltracer:
-        lines.append("=" * 50)
-        lines.append("  SIM & DEVICE INFO")
-        lines.append("-" * 50)
-        lines.append(f"  NUMBER         : {safe_str(calltracer.get('Number'))}")
-        lines.append(f"  SIM CARD       : {safe_str(calltracer.get('SIM card'))}")
-        lines.append(f"  MOBILE STATE   : {safe_str(calltracer.get('Mobile State'))}")
-        lines.append(f"  CONNECTION     : {safe_str(calltracer.get('Connection'))}")
-        lines.append(f"  HOMETOWN       : {safe_str(calltracer.get('Hometown'))}")
-        lines.append(f"  LANGUAGE       : {safe_str(calltracer.get('Language'))}")
-        if calltracer.get("IMEI number"):
-            lines.append(f"  IMEI           : {safe_str(calltracer.get('IMEI number'))}")
-        if calltracer.get("MAC address"):
-            lines.append(f"  MAC ADDRESS    : {safe_str(calltracer.get('MAC address'))}")
-        if calltracer.get("IP address"):
-            lines.append(f"  IP ADDRESS     : {safe_str(calltracer.get('IP address'))}")
-        if calltracer.get("Owner Address"):
-            lines.append(f"  OWNER ADDRESS  : {safe_str(calltracer.get('Owner Address'))}")
-        if calltracer.get("Refrence City"):
-            lines.append(f"  REFERENCE CITY : {safe_str(calltracer.get('Refrence City'))}")
-        if calltracer.get("Mobile Locations"):
-            lines.append(f"  MOB LOCATIONS  : {safe_str(calltracer.get('Mobile Locations'))[:80]}")
-        if calltracer.get("Tower Locations"):
-            lines.append(f"  TOWER LOCS     : {safe_str(calltracer.get('Tower Locations'))[:80]}")
-        if calltracer.get("Tracking History"):
-            lines.append(f"  TRACKING       : {safe_str(calltracer.get('Tracking History'))}")
-        if calltracer.get("Helpline"):
-            lines.append(f"  HELPLINE       : {safe_str(calltracer.get('Helpline'))}")
+        lines.append("━━ SIM INFO ━━")
+        number_val = safe_str(calltracer.get("Number"))
+        if number_val and number_val != "N/A": lines.append(f"📞 Number: {number_val}")
+        sim = safe_str(calltracer.get("SIM card"))
+        if sim and sim != "N/A": lines.append(f"💳 SIM: {sim}")
+        state = safe_str(calltracer.get("Mobile State"))
+        if state and state != "N/A": lines.append(f"🗺 State: {state}")
+        conn = safe_str(calltracer.get("Connection"))
+        if conn and conn != "N/A": lines.append(f"🔗 Connection: {conn}")
+        hometown = safe_str(calltracer.get("Hometown"))
+        if hometown and hometown != "N/A": lines.append(f"🏠 Hometown: {hometown}")
+        lang = safe_str(calltracer.get("Language"))
+        if lang and lang != "N/A": lines.append(f"🗣 Language: {lang}")
+        imei = safe_str(calltracer.get("IMEI number"))
+        if imei and imei != "N/A": lines.append(f"🔢 IMEI: {imei}")
+        tracking = safe_str(calltracer.get("Tracking History"))
+        if tracking and tracking != "N/A": lines.append(f"📍 Tracking: {tracking}")
         lines.append("")
 
-    # Footer
-    lines.append("═" * 50)
-    lines.append(f"  Powered by @HATHI02")
-    lines.append(f"  Developed by @shadowxdeveloper")
+    if not results and not chain and not calltracer:
+        lines.append("No data found for this number.")
+        lines.append("")
 
+    lines.append("⚡ Powered by Hathi OSINT")
     return "\n".join(lines)
+
 
 
 # === NUMLEAK TEXT REPORT ===
@@ -486,89 +484,105 @@ def generate_numleak_text_report(data: dict) -> str:
 
 # === UPI TEXT REPORT ===
 def generate_upi_text_report(data: dict) -> str:
-    """Generate a text report for UPI lookup data."""
+    """Generate a clean emoji-style text report for UPI lookup."""
     number = data.get("number", "N/A")
     upi_data = data.get("upi_data", {})
 
     lines = []
-    lines.append("╔══════════════════════════════════════════════════╗")
-    lines.append("║       UPI INTELLIGENCE REPORT                   ║")
-    lines.append("╚══════════════════════════════════════════════════╝")
-    lines.append(f"  Target Number: {number}")
+    lines.append("💳 UPI Lookup Result")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"📞 Number: {number}")
     lines.append("")
 
-    # Handle different response formats
-    # The API may return data in different structures
-    accounts = upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else []
-    transactions = upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else []
-    
-    # Flat response format
-    if not accounts and not transactions:
-        accounts = upi_data.get("accounts", [])
-        transactions = upi_data.get("transactions", [])
+    # Handle flat vs nested response format
+    flat_fields = {}
+    accounts = upi_data.get("accounts", []) or (upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else [])
+    transactions = upi_data.get("transactions", []) or (upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else [])
 
-    # Display all key-value pairs from the response
-    if upi_data:
-        lines.append("=" * 50)
-        lines.append("  UPI DETAILS")
-        lines.append("-" * 50)
-        
-        # Print top-level fields
-        for key, value in upi_data.items():
-            if key in ["accounts", "transactions", "data"]:
+    # Collect all flat fields
+    for d in [upi_data, upi_data.get("data", {}) if isinstance(upi_data.get("data"), dict) else {}]:
+        for k, v in d.items():
+            if k in ["accounts", "transactions", "data"]:
                 continue
-            if isinstance(value, (dict, list)):
+            if isinstance(v, (dict, list)):
                 continue
-            lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        
-        # Print nested data fields
-        nested = upi_data.get("data", {})
-        if isinstance(nested, dict):
-            for key, value in nested.items():
-                if key in ["accounts", "transactions"]:
-                    continue
-                if isinstance(value, (dict, list)):
-                    continue
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        lines.append("")
+            if v and str(v) not in ["", "N/A", "None"]:
+                flat_fields[k.lower()] = str(v)
 
-    # Accounts
+    # Display UPI fields with smart emoji mapping
+    emoji_map = {
+        "phone": "📞", "number": "📞", "num": "📞",
+        "upi": "💳", "vpa": "💳", "upi_id": "💳", "upi id": "💳",
+        "name": "👤", "holder_name": "👤", "account_holder": "👤", "owner": "👤",
+        "app": "📱", "app_name": "📱",
+        "bank": "🏦", "bank_name": "🏦",
+        "valid": "✅", "status": "✅",
+        "ifsc": "📋",
+        "account_type": "👤", "type": "👤",
+        "branch": "🏛",
+        "address": "📍", "location": "📍",
+        "city": "🏙",
+        "success": "✅", "response": "⏳",
+        "by": "👤", "owner": "👤",
+    }
+
+    # Order keys for display
+    key_order = ["phone", "number", "num", "vpa", "upi_id", "upi", "upi id", "name", "holder_name",
+                 "account_holder", "app", "app_name", "bank", "bank_name", "valid", "status",
+                 "ifsc", "account_type", "type", "branch", "address", "city", "location", "success"]
+
+    displayed = set()
+    for k in key_order:
+        if k in flat_fields and k not in displayed:
+            emoji = emoji_map.get(k, "🔹")
+            label = k.replace("_", " ").title()
+            lines.append(f"{emoji} {label}: {flat_fields[k]}")
+            displayed.add(k)
+
+    # Remaining fields
+    for k, v in flat_fields.items():
+        if k not in displayed:
+            emoji = emoji_map.get(k, "🔹")
+            label = k.replace("_", " ").title()
+            lines.append(f"{emoji} {label}: {v}")
+
+    lines.append("")
+
+    # Accounts section
     if accounts:
-        lines.append("=" * 50)
+        lines.append("=" * 44)
         lines.append("  LINKED UPI ACCOUNTS")
-        lines.append("-" * 50)
+        lines.append("-" * 44)
         for i, acc in enumerate(accounts[:10], 1):
-            lines.append(f"  ┌── ACCOUNT #{i} ──")
+            lines.append(f"  >> Account #{i} <<")
             if isinstance(acc, dict):
                 for key, value in acc.items():
                     if isinstance(value, (dict, list)):
                         continue
-                    lines.append(f"  │ {key.upper():<16}: {safe_str(value)}")
+                    lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
             else:
-                lines.append(f"  │ UPI ID         : {safe_str(acc)}")
-            lines.append(f"  └{'─' * 40}")
+                lines.append(f"    UPI ID: {safe_str(acc)}")
             lines.append("")
 
-    # Transactions
+    # Transactions section
     if transactions:
-        lines.append("=" * 50)
+        lines.append("=" * 44)
         lines.append("  TRANSACTION HISTORY")
-        lines.append("-" * 50)
+        lines.append("-" * 44)
         for i, tx in enumerate(transactions[:10], 1):
-            lines.append(f"  ┌── TRANSACTION #{i} ──")
+            lines.append(f"  >> Transaction #{i} <<")
             if isinstance(tx, dict):
                 for key, value in tx.items():
                     if isinstance(value, (dict, list)):
                         continue
-                    lines.append(f"  │ {key.upper():<16}: {safe_str(value)}")
+                    lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
             else:
-                lines.append(f"  │ TXN            : {safe_str(tx)}")
-            lines.append(f"  └{'─' * 40}")
+                lines.append(f"    TXN: {safe_str(tx)}")
             lines.append("")
 
-    lines.append("═" * 50)
-    lines.append(f"  Powered by @HATHI02")
+    lines.append("⚡ Powered by Hathi OSINT")
     return "\n".join(lines)
+
 
 
 # === VEHICLE TEXT REPORT ===
@@ -584,160 +598,196 @@ def _normalize_vehicle_data(vehicle_data: dict) -> dict:
 
 
 def generate_vehicle_text_report(data: dict) -> str:
-    """Generate a text report for vehicle registration data."""
+    """Generate a clean emoji-style text report for vehicle lookup."""
     plate = data.get("vehicle_plate", "N/A")
     vehicle_data = _normalize_vehicle_data(data.get("vehicle_data", {}))
 
     lines = []
-    lines.append("╔══════════════════════════════════════════════════╗")
-    lines.append("║       VEHICLE REGISTRATION REPORT               ║")
-    lines.append("╚══════════════════════════════════════════════════╝")
-    lines.append(f"  Plate Number: {plate}")
+    lines.append("🚗 Vehicle Lookup Result")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"🔢 Plate: {plate}")
     lines.append("")
 
-    # Flat API response support (vh-num.vercel.app returns flat keys)
+    # Flat API format (vh-num.vercel.app)
     if vehicle_data.get("regNo") or vehicle_data.get("owner"):
-        # Map flat keys to report sections
-        lines.append("=" * 50)
-        lines.append("  VEHICLE DETAILS")
-        lines.append("-" * 50)
-        for k, label in [("regNo", "REG NUMBER"), ("vehicle", "VEHICLE"), ("manufacturer", "MANUFACTURER"), ("variant", "VARIANT"), ("fuelType", "FUEL TYPE"), ("vehicleClass", "VEHICLE CLASS"), ("color", "COLOR"), ("manufacturerYear", "MFG YEAR"), ("seatCapacity", "SEAT CAPACITY")]:
-            v = vehicle_data.get(k)
-            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        # Vehicle details
+        lines.append("🚗 Vehicle Details")
+        lines.append("-" * 40)
+        mapping = [
+            ("🔢", "regNo", "Reg No"),
+            ("🚗", "vehicle", "Vehicle"),
+            ("🏭", "manufacturer", "Manufacturer"),
+            ("📅", "manufacturerYear", "Year"),
+            ("💨", "variant", "Variant"),
+            ("⛽", "fuelType", "Fuel"),
+            ("🎨", "color", "Color"),
+            ("🎶", "vehicleClass", "Class"),
+            ("💺", "seatCapacity", "Seats"),
+            ("🏛", "rtoCode", "RTO"),
+            ("📅", "regDate", "Reg Date"),
+        ]
+        for emoji, key, label in mapping:
+            v = vehicle_data.get(key)
+            if v:
+                lines.append(f"{emoji} {label}: {safe_str(v)}")
+
         lines.append("")
-        lines.append("=" * 50)
-        lines.append("  OWNER DETAILS")
-        lines.append("-" * 50)
-        for k, label in [("owner", "OWNER NAME"), ("fatherName", "FATHER NAME"), ("mobileNumber", "MOBILE"), ("presentAddress", "ADDRESS"), ("permanentAddress", "PERM ADDRESS")]:
-            v = vehicle_data.get(k)
-            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        # Owner details
+        owner_name = vehicle_data.get("owner")
+        if owner_name:
+            lines.append(f"👤 Owner: {safe_str(owner_name)}")
+            mobile = vehicle_data.get("mobileNumber")
+            if mobile:
+                lines.append(f"📞 Mobile: {safe_str(mobile)}")
+            addr = vehicle_data.get("presentAddress") or vehicle_data.get("permAddress") or vehicle_data.get("address")
+            if addr:
+                lines.append(f"📍 Address: {safe_str(addr)}")
+            financer = vehicle_data.get("financerName")
+            if financer:
+                lines.append(f"🏦 Financer: {safe_str(financer)}")
+
         lines.append("")
-        lines.append("=" * 50)
-        lines.append("  REGISTRATION")
-        lines.append("-" * 50)
-        for k, label in [("regDate", "REG DATE"), ("regAuthority", "REG AUTHORITY"), ("rtoCode", "RTO CODE"), ("chassisNumber", "CHASSIS NO"), ("engineNumber", "ENGINE NO"), ("cubicCapacity", "ENGINE CC")]:
-            v = vehicle_data.get(k)
-            # Also check for chassis/engine under different names in nested data
-            if not v and k == "chassisNumber": v = vehicle_data.get("chassis")
-            if not v and k == "engineNumber": v = vehicle_data.get("engine")
-            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        # Insurance & Tax
+        lines.append("🛡 Insurance & Tax")
+        lines.append("-" * 40)
+        insurance_fields = [
+            ("🛡", "insuranceCompanyName", "Insurance"),
+            ("📅", "insuranceUpto", "Valid Upto"),
+            ("📋", "insurancePolicyNumber", "Policy No"),
+            ("📅", "fitnessUpto", "Fitness Upto"),
+            ("📅", "mvTaxUpto", "Tax Upto"),
+        ]
+        for emoji, key, label in insurance_fields:
+            v = vehicle_data.get(key)
+            if v:
+                lines.append(f"{emoji} {label}: {safe_str(v)}")
+
         lines.append("")
-        lines.append("=" * 50)
-        lines.append("  TAX & INSURANCE")
-        lines.append("-" * 50)
-        for k, label in [("mvTaxUpto", "TAX UPTO"), ("fitnessUpto", "FITNESS UPTO"), ("insuranceCompanyName", "INSURER"), ("insurancePolicyNumber", "POLICY NO"), ("insuranceUpto", "INSURANCE UPTO")]:
-            v = vehicle_data.get(k)
-            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
-        if vehicle_data.get("financerName"):
-            lines.append(f"  {'FINANCER':<16}: {safe_str(vehicle_data.get('financerName'))}")
-        lines.append("")
+        # Technical details
+        chassis = vehicle_data.get("chassisNumber") or vehicle_data.get("chassis")
+        engine = vehicle_data.get("engineNumber") or vehicle_data.get("engine")
+        if chassis or engine:
+            lines.append("🔧 Technical")
+            lines.append("-" * 40)
+            if engine:
+                lines.append(f"🔧 Engine: {safe_str(engine)}")
+            if chassis:
+                lines.append(f"🧰 Chassis: {safe_str(chassis)}")
+            lines.append("")
+
     else:
         # Nested format fallback
         owner = vehicle_data.get("owner", {})
         vehicle = vehicle_data.get("vehicle", {})
         insurance = vehicle_data.get("insurance", {})
         technical = vehicle_data.get("technical", {})
-        
-        # Try fallback key mapping for flat format deeper in nested
+
+        # Try fallback key mapping
         if not owner and not vehicle:
             owner = {
                 "name": vehicle_data.get("owner"),
-                "father_name": vehicle_data.get("fatherName"),
                 "mobile": vehicle_data.get("mobileNumber"),
-                "address": vehicle_data.get("presentAddress") or vehicle_data.get("permAddress"),
             }
             vehicle = {
-                "reg_no": vehicle_data.get("regNo") or vehicle_data.get("vehicleNumber"),
+                "reg_no": vehicle_data.get("regNo"),
                 "manufacturer": vehicle_data.get("manufacturer"),
                 "model": vehicle_data.get("vehicle"),
-                "variant": vehicle_data.get("variant"),
                 "fuel_type": vehicle_data.get("fuelType"),
                 "class": vehicle_data.get("vehicleClass"),
                 "color": vehicle_data.get("color"),
-                "mfg_year": vehicle_data.get("manufacturerYear"),
-                "reg_date": vehicle_data.get("regDate"),
-                "rto_code": vehicle_data.get("rtoCode"),
             }
             insurance = {
                 "insurer": vehicle_data.get("insuranceCompanyName"),
-                "policy_number": vehicle_data.get("insurancePolicyNumber"),
-                "insurance_upto": vehicle_data.get("insuranceUpto"),
+                "policy": vehicle_data.get("insurancePolicyNumber"),
+                "valid_upto": vehicle_data.get("insuranceUpto"),
             }
             technical = {
-                "chassis_no": vehicle_data.get("chassisNumber") or vehicle_data.get("chassis"),
-                "engine_no": vehicle_data.get("engineNumber") or vehicle_data.get("engine"),
+                "chassis": vehicle_data.get("chassisNumber") or vehicle_data.get("chassis"),
+                "engine": vehicle_data.get("engineNumber") or vehicle_data.get("engine"),
                 "financier": vehicle_data.get("financerName"),
-                "mv_tax_upto": vehicle_data.get("mvTaxUpto"),
-                "fitness_upto": vehicle_data.get("fitnessUpto"),
             }
 
-        # OWNER section
-        if owner and any(owner.values()):
-            lines.append("=" * 50)
-            lines.append("  OWNER DETAILS")
-            lines.append("-" * 50)
-            if isinstance(owner, dict):
-                for key, value in owner.items():
-                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-            else:
-                lines.append(f"  OWNER           : {safe_str(owner)}")
+        has_data = False
+        # Vehicle section
+        if isinstance(vehicle, dict) and any(v for v in vehicle.values() if v):
+            has_data = True
+            lines.append("🚗 Vehicle Details")
+            lines.append("-" * 40)
+            vmap = {"reg_no": ("🔢", "Reg No"), "manufacturer": ("🏭", "Maker"),
+                    "model": ("🚗", "Model"), "fuel_type": ("⛽", "Fuel"),
+                    "class": ("🎶", "Class"), "color": ("🎨", "Color"),
+                    "reg_date": ("📅", "Reg Date"), "rto_code": ("🏛", "RTO")}
+            for k, (emoji, label) in vmap.items():
+                v = vehicle.get(k)
+                if v:
+                    lines.append(f"{emoji} {label}: {safe_str(v)}")
             lines.append("")
 
-        # VEHICLE section
-        if vehicle and any(vehicle.values()):
-            lines.append("=" * 50)
-            lines.append("  VEHICLE DETAILS")
-            lines.append("-" * 50)
-            if isinstance(vehicle, dict):
-                for key, value in vehicle.items():
-                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-            else:
-                lines.append(f"  VEHICLE         : {safe_str(vehicle)}")
+        # Owner section
+        if isinstance(owner, dict) and any(v for v in owner.values() if v):
+            has_data = True
+            omap = {"name": ("👤", "Owner"), "father_name": ("👨", "Father"),
+                    "mobile": ("📞", "Mobile"), "address": ("📍", "Address"),
+                    "perm_address": ("📍", "Perm Address")}
+            for k, (emoji, label) in omap.items():
+                v = owner.get(k)
+                if v:
+                    lines.append(f"{emoji} {label}: {safe_str(v)}")
             lines.append("")
 
-        # INSURANCE section
-        if insurance and any(insurance.values()):
-            lines.append("=" * 50)
-            lines.append("  INSURANCE DETAILS")
-            lines.append("-" * 50)
-            if isinstance(insurance, dict):
-                for key, value in insurance.items():
-                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-            else:
-                lines.append(f"  INSURANCE       : {safe_str(insurance)}")
+        # Insurance section
+        if isinstance(insurance, dict) and any(v for v in insurance.values() if v):
+            has_data = True
+            lines.append("🛡 Insurance")
+            lines.append("-" * 40)
+            imap = {"insurer": ("🏦", "Insurer"), "policy": ("📋", "Policy"),
+                    "valid_upto": ("📅", "Valid Upto")}
+            for k, (emoji, label) in imap.items():
+                v = insurance.get(k)
+                if v:
+                    lines.append(f"{emoji} {label}: {safe_str(v)}")
             lines.append("")
 
-        # TECHNICAL section
-        if technical and any(technical.values()):
-            lines.append("=" * 50)
-            lines.append("  TECHNICAL DETAILS")
-            lines.append("-" * 50)
-            if isinstance(technical, dict):
-                for key, value in technical.items():
-                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-            else:
-                lines.append(f"  TECHNICAL       : {safe_str(technical)}")
+        # Technical section
+        if isinstance(technical, dict) and any(v for v in technical.values() if v):
+            has_data = True
+            lines.append("🔧 Technical")
+            lines.append("-" * 40)
+            tmap = {"engine": ("🔧", "Engine"), "chassis": ("🧰", "Chassis"),
+                    "financier": ("🏦", "Financer"), "mv_tax_upto": ("📅", "Tax Upto"),
+                    "fitness_upto": ("📅", "Fitness Upto")}
+            for k, (emoji, label) in tmap.items():
+                v = technical.get(k)
+                if v:
+                    lines.append(f"{emoji} {label}: {safe_str(v)}")
             lines.append("")
 
-    # If nothing worked, dump all data as fallback
+        if not has_data:
+            lines.append("No vehicle data found.")
+            lines.append("")
+
+    # Fallback: dump all raw data
     if not any(vehicle_data.get(k) for k in ["regNo", "owner", "manufacturer", "vehicle"]):
-        lines.append("=" * 50)
-        lines.append("  VEHICLE DATA")
-        lines.append("-" * 50)
-        for key, value in vehicle_data.items():
-            if isinstance(value, dict) and key != "data":
-                lines.append(f"  {key.upper():<18}:")
-                for k2, v2 in value.items():
-                    if v2: lines.append(f"    {k2.upper():<16}: {safe_str(v2)}")
-            elif isinstance(value, list):
-                lines.append(f"  {key.upper():<18}: ({len(value)} items)")
-            else:
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        lines.append("")
+        # Check if any data was actually printed above
+        if not any(k in vehicle_data for k in ["regNo", "owner", "manufacturer", "vehicle"]):
+            lines.append("📊 Raw Data")
+            lines.append("-" * 40)
+            for key, value in vehicle_data.items():
+                if isinstance(value, dict) and key != "data":
+                    lines.append(f"  {key.replace('_', ' ').title()}:")
+                    for k2, v2 in value.items():
+                        if v2:
+                            lines.append(f"    {k2.replace('_', ' ').title()}: {safe_str(v2)}")
+                elif isinstance(value, list):
+                    if value:
+                        lines.append(f"  {key.replace('_', ' ').title()}: ({len(value)} items)")
+                else:
+                    lines.append(f"  {key.replace('_', ' ').title()}: {safe_str(value)}")
+            lines.append("")
 
-    lines.append("═" * 50)
-    lines.append(f"  Powered by @HATHI02")
+    lines.append("⚡ Powered by Hathi OSINT")
     return "\n".join(lines)
+
 
 
 # === NUMLEAK PDF ===
