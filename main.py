@@ -10,7 +10,7 @@ from telegram.ext import (
 from telegram.error import Conflict, TimedOut, NetworkError
 
 import database as db
-from config import BOT_TOKEN, ADMIN_IDS
+from config import BOT_TOKEN, ADMIN_IDS, API_RELAY_URL
 from handlers import (
     start,
     help_command,
