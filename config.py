@@ -15,7 +15,7 @@ OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
 
 # Optional API relay/proxy URL (set this if Railway blocks direct API access)
 # Example: "https://your-relay.workers.dev/proxy" or "http://your-vps:8080/proxy"
-API_RELAY_URL = os.getenv("API_RELAY_URL", "https://telegram-osint-bot.shadowgamer543254.workers.dev/proxy")
+API_RELAY_URL = os.getenv("API_RELAY_URL", "https://osint-api-relay.shadowgamer543254.workers.dev/proxy")
 
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")
