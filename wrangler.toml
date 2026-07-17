@@ -1,0 +1,14 @@
+name = "telegram-osint-bot"
+main = "relay/worker.js"
+compatibility_date = "2024-01-01"
+
+# No static assets - this is a Workers project, not Pages
+[site]
+bucket = ""
+
+# Environment variables (set in Cloudflare dashboard or via secrets)
+[vars]
+# No vars needed currently
+
+# Compat flags for modern APIs
+compatibility_flags = ["nodejs_compat"]

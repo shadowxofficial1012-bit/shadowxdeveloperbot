@@ -1142,6 +1142,15 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Data check: has_number_data={has_number_data}, has_leak_data={has_leak_data}")
 
+    # If data is not in expected keys, check if data exists at all
+    if not has_number_data and number_data_raw and isinstance(number_data_raw, dict) and len(number_data_raw) > 0:
+        # The API returned something, just not in the expected nested format
+        # Mark as data found so we still display it
+        has_number_data = True
+
+    if not has_leak_data and numleak_data_raw and isinstance(numleak_data_raw, dict) and len(numleak_data_raw) > 0:
+        has_leak_data = True
+
     if not has_number_data and not has_leak_data:
         # Both endpoints failed or returned no data
         err_msgs = []
@@ -1349,7 +1358,15 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     upi_data_raw = result_upi.get("data", {})
-    has_upi_data = bool(upi_data_raw.get("upi") or upi_data_raw.get("account") or upi_data_raw.get("transaction") or upi_data_raw.get("data"))
+    # Check for all known UPI response formats: nested (upi/account keys), flat (vpa/name keys), or any non-empty dict
+    has_upi_data = bool(
+        upi_data_raw.get("upi") or upi_data_raw.get("account") or 
+        upi_data_raw.get("transaction") or upi_data_raw.get("data") or
+        upi_data_raw.get("vpa") or upi_data_raw.get("name") or 
+        upi_data_raw.get("bank") or upi_data_raw.get("upi_id") or
+        upi_data_raw.get("account_holder") or
+        (isinstance(upi_data_raw, dict) and len(upi_data_raw) > 0)
+    )
 
     if not has_upi_data:
         await loading_msg.edit_text(
@@ -1542,7 +1559,14 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     vehicle_data_raw = result_vehicle.get("data", {})
-    has_vehicle_data = bool(vehicle_data_raw.get("vehicle") or vehicle_data_raw.get("owner") or vehicle_data_raw.get("data") or vehicle_data_raw.get("registration_number"))
+    # Check for all known vehicle response formats: nested (vehicle/owner keys), flat (regNo/owner keys), or any non-empty dict
+    has_vehicle_data = bool(
+        vehicle_data_raw.get("vehicle") or vehicle_data_raw.get("owner") or 
+        vehicle_data_raw.get("data") or vehicle_data_raw.get("registration_number") or
+        vehicle_data_raw.get("regNo") or vehicle_data_raw.get("reg_no") or
+        vehicle_data_raw.get("manufacturer") or vehicle_data_raw.get("maker") or
+        (isinstance(vehicle_data_raw, dict) and len(vehicle_data_raw) > 0)
+    )
 
     if not has_vehicle_data:
         await loading_msg.edit_text(

@@ -1,5 +1,0 @@
-name = "telegram-osint-bot"
-main = "worker.js"
-compatibility_date = "2024-01-01"
-
-# Deploy this worker via Cloudflare Dashboard: dash.cloudflare.com -> Workers & Pages -> Create -> paste worker.js code
