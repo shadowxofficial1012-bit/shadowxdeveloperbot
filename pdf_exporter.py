@@ -584,11 +584,43 @@ def generate_vehicle_text_report(data: dict) -> str:
     lines.append(f"  Plate Number: {plate}")
     lines.append("")
 
-    # Parse vehicle data - may come in different formats
-    owner = vehicle_data.get("owner", {})
-    vehicle = vehicle_data.get("vehicle", {})
-    insurance = vehicle_data.get("insurance", {})
-    technical = vehicle_data.get("technical", {})
+    # Flat API response support (vh-num.vercel.app returns flat keys)
+    if vehicle_data.get("regNo") or vehicle_data.get("owner"):
+        # Map flat keys to report sections
+        lines.append("=" * 50)
+        lines.append("  VEHICLE DETAILS")
+        lines.append("-" * 50)
+        for k, label in [("regNo", "REG NUMBER"), ("vehicle", "VEHICLE"), ("manufacturer", "MANUFACTURER"), ("variant", "VARIANT"), ("fuelType", "FUEL TYPE"), ("vehicleClass", "VEHICLE CLASS"), ("color", "COLOR"), ("manufacturerYear", "MFG YEAR"), ("seatCapacity", "SEAT CAPACITY")]:
+            v = vehicle_data.get(k)
+            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        lines.append("")
+        lines.append("=" * 50)
+        lines.append("  OWNER DETAILS")
+        lines.append("-" * 50)
+        for k, label in [("owner", "OWNER NAME"), ("fatherName", "FATHER NAME"), ("mobileNumber", "MOBILE"), ("presentAddress", "ADDRESS"), ("permanentAddress", "PERM ADDRESS")]:
+            v = vehicle_data.get(k)
+            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        lines.append("")
+        lines.append("=" * 50)
+        lines.append("  REGISTRATION")
+        lines.append("-" * 50)
+        for k, label in [("regDate", "REG DATE"), ("regAuthority", "REG AUTHORITY"), ("rtoCode", "RTO CODE"), ("chassisNumber", "CHASSIS NO"), ("engineNumber", "ENGINE NO"), ("cubicCapacity", "ENGINE CC")]:
+            v = vehicle_data.get(k)
+            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        lines.append("")
+        lines.append("=" * 50)
+        lines.append("  TAX & INSURANCE")
+        lines.append("-" * 50)
+        for k, label in [("mvTaxUpto", "TAX UPTO"), ("fitnessUpto", "FITNESS UPTO"), ("insuranceCompanyName", "INSURER"), ("insuranceUpto", "INSURANCE UPTO"), ("policyNumber", "POLICY NO")]:
+            v = vehicle_data.get(k)
+            if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        lines.append("")
+    else:
+        # Nested format fallback
+        owner = vehicle_data.get("owner", {})
+        vehicle = vehicle_data.get("vehicle", {})
+        insurance = vehicle_data.get("insurance", {})
+        technical = vehicle_data.get("technical", {})
     
     # Flat response format fallback
     if not owner and not vehicle:
