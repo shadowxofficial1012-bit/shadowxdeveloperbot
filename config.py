@@ -14,7 +14,9 @@ OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://vh-num.verce
 OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
 
 # API relay proxy URL (bypasses Railway network restrictions)
-API_RELAY_URL = os.getenv("API_RELAY_URL", "https://telegram-osint-bot.shadowgamer543254.workers.dev/proxy")
+# If empty/unset, the bot calls APIs directly (with fallback).
+# Set this to your Cloudflare Worker URL if you need to bypass Railway's network blocks.
+API_RELAY_URL = os.getenv("API_RELAY_URL", "")
 
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")
