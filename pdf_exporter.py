@@ -572,10 +572,21 @@ def generate_upi_text_report(data: dict) -> str:
 
 
 # === VEHICLE TEXT REPORT ===
+def _normalize_vehicle_data(vehicle_data: dict) -> dict:
+    """Unwrap nested 'data' key from APIs like vh-num.vercel.app and merge into top level."""
+    if isinstance(vehicle_data.get("data"), dict):
+        merged = dict(vehicle_data)
+        for k, v in vehicle_data["data"].items():
+            if k not in merged or merged[k] is None or merged[k] == "":
+                merged[k] = v
+        return merged
+    return vehicle_data
+
+
 def generate_vehicle_text_report(data: dict) -> str:
     """Generate a text report for vehicle registration data."""
     plate = data.get("vehicle_plate", "N/A")
-    vehicle_data = data.get("vehicle_data", {})
+    vehicle_data = _normalize_vehicle_data(data.get("vehicle_data", {}))
 
     lines = []
     lines.append("╔══════════════════════════════════════════════════╗")
@@ -606,14 +617,19 @@ def generate_vehicle_text_report(data: dict) -> str:
         lines.append("-" * 50)
         for k, label in [("regDate", "REG DATE"), ("regAuthority", "REG AUTHORITY"), ("rtoCode", "RTO CODE"), ("chassisNumber", "CHASSIS NO"), ("engineNumber", "ENGINE NO"), ("cubicCapacity", "ENGINE CC")]:
             v = vehicle_data.get(k)
+            # Also check for chassis/engine under different names in nested data
+            if not v and k == "chassisNumber": v = vehicle_data.get("chassis")
+            if not v and k == "engineNumber": v = vehicle_data.get("engine")
             if v: lines.append(f"  {label:<16}: {safe_str(v)}")
         lines.append("")
         lines.append("=" * 50)
         lines.append("  TAX & INSURANCE")
         lines.append("-" * 50)
-        for k, label in [("mvTaxUpto", "TAX UPTO"), ("fitnessUpto", "FITNESS UPTO"), ("insuranceCompanyName", "INSURER"), ("insuranceUpto", "INSURANCE UPTO"), ("policyNumber", "POLICY NO")]:
+        for k, label in [("mvTaxUpto", "TAX UPTO"), ("fitnessUpto", "FITNESS UPTO"), ("insuranceCompanyName", "INSURER"), ("insurancePolicyNumber", "POLICY NO"), ("insuranceUpto", "INSURANCE UPTO")]:
             v = vehicle_data.get(k)
             if v: lines.append(f"  {label:<16}: {safe_str(v)}")
+        if vehicle_data.get("financerName"):
+            lines.append(f"  {'FINANCER':<16}: {safe_str(vehicle_data.get('financerName'))}")
         lines.append("")
     else:
         # Nested format fallback
@@ -621,99 +637,98 @@ def generate_vehicle_text_report(data: dict) -> str:
         vehicle = vehicle_data.get("vehicle", {})
         insurance = vehicle_data.get("insurance", {})
         technical = vehicle_data.get("technical", {})
-    
-    # Flat response format fallback
-    if not owner and not vehicle:
-        # Try to map flat fields
-        owner = {
-            "name": vehicle_data.get("owner_name") or vehicle_data.get("name"),
-            "father_name": vehicle_data.get("father_name") or vehicle_data.get("fname"),
-            "address": vehicle_data.get("owner_address") or vehicle_data.get("address"),
-        }
-        vehicle = {
-            "registration_number": vehicle_data.get("registration_number") or vehicle_data.get("reg_no"),
-            "maker": vehicle_data.get("maker") or vehicle_data.get("company"),
-            "model": vehicle_data.get("model"),
-            "color": vehicle_data.get("color"),
-            "fuel_type": vehicle_data.get("fuel_type") or vehicle_data.get("fuel"),
-            "seating_capacity": vehicle_data.get("seating_capacity") or vehicle_data.get("seats"),
-            "vehicle_class": vehicle_data.get("vehicle_class") or vehicle_data.get("category"),
-            "registration_date": vehicle_data.get("registration_date") or vehicle_data.get("reg_date"),
-            "fitness_upto": vehicle_data.get("fitness_upto"),
-            "tax_upto": vehicle_data.get("tax_upto"),
-        }
-        insurance = {
-            "policy_number": vehicle_data.get("policy_number"),
-            "insurance_upto": vehicle_data.get("insurance_upto"),
-            "insurer": vehicle_data.get("insurer") or vehicle_data.get("insurance_company"),
-        }
-        technical = {
-            "chassis_number": vehicle_data.get("chassis_number") or vehicle_data.get("chassis"),
-            "engine_number": vehicle_data.get("engine_number") or vehicle_data.get("engine"),
-            "engine_capacity": vehicle_data.get("engine_capacity"),
-            "norms_type": vehicle_data.get("norms_type"),
-            "financier": vehicle_data.get("financier"),
-            "mv_tax_upto": vehicle_data.get("mv_tax_upto"),
-        }
+        
+        # Try fallback key mapping for flat format deeper in nested
+        if not owner and not vehicle:
+            owner = {
+                "name": vehicle_data.get("owner"),
+                "father_name": vehicle_data.get("fatherName"),
+                "mobile": vehicle_data.get("mobileNumber"),
+                "address": vehicle_data.get("presentAddress") or vehicle_data.get("permAddress"),
+            }
+            vehicle = {
+                "reg_no": vehicle_data.get("regNo") or vehicle_data.get("vehicleNumber"),
+                "manufacturer": vehicle_data.get("manufacturer"),
+                "model": vehicle_data.get("vehicle"),
+                "variant": vehicle_data.get("variant"),
+                "fuel_type": vehicle_data.get("fuelType"),
+                "class": vehicle_data.get("vehicleClass"),
+                "color": vehicle_data.get("color"),
+                "mfg_year": vehicle_data.get("manufacturerYear"),
+                "reg_date": vehicle_data.get("regDate"),
+                "rto_code": vehicle_data.get("rtoCode"),
+            }
+            insurance = {
+                "insurer": vehicle_data.get("insuranceCompanyName"),
+                "policy_number": vehicle_data.get("insurancePolicyNumber"),
+                "insurance_upto": vehicle_data.get("insuranceUpto"),
+            }
+            technical = {
+                "chassis_no": vehicle_data.get("chassisNumber") or vehicle_data.get("chassis"),
+                "engine_no": vehicle_data.get("engineNumber") or vehicle_data.get("engine"),
+                "financier": vehicle_data.get("financerName"),
+                "mv_tax_upto": vehicle_data.get("mvTaxUpto"),
+                "fitness_upto": vehicle_data.get("fitnessUpto"),
+            }
 
-    # OWNER section
-    if owner:
-        lines.append("=" * 50)
-        lines.append("  OWNER DETAILS")
-        lines.append("-" * 50)
-        if isinstance(owner, dict):
-            for key, value in owner.items():
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        else:
-            lines.append(f"  OWNER           : {safe_str(owner)}")
-        lines.append("")
+        # OWNER section
+        if owner and any(owner.values()):
+            lines.append("=" * 50)
+            lines.append("  OWNER DETAILS")
+            lines.append("-" * 50)
+            if isinstance(owner, dict):
+                for key, value in owner.items():
+                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+            else:
+                lines.append(f"  OWNER           : {safe_str(owner)}")
+            lines.append("")
 
-    # VEHICLE section
-    if vehicle:
-        lines.append("=" * 50)
-        lines.append("  VEHICLE DETAILS")
-        lines.append("-" * 50)
-        if isinstance(vehicle, dict):
-            for key, value in vehicle.items():
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        else:
-            lines.append(f"  VEHICLE         : {safe_str(vehicle)}")
-        lines.append("")
+        # VEHICLE section
+        if vehicle and any(vehicle.values()):
+            lines.append("=" * 50)
+            lines.append("  VEHICLE DETAILS")
+            lines.append("-" * 50)
+            if isinstance(vehicle, dict):
+                for key, value in vehicle.items():
+                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+            else:
+                lines.append(f"  VEHICLE         : {safe_str(vehicle)}")
+            lines.append("")
 
-    # INSURANCE section
-    if insurance:
-        lines.append("=" * 50)
-        lines.append("  INSURANCE DETAILS")
-        lines.append("-" * 50)
-        if isinstance(insurance, dict):
-            for key, value in insurance.items():
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        else:
-            lines.append(f"  INSURANCE       : {safe_str(insurance)}")
-        lines.append("")
+        # INSURANCE section
+        if insurance and any(insurance.values()):
+            lines.append("=" * 50)
+            lines.append("  INSURANCE DETAILS")
+            lines.append("-" * 50)
+            if isinstance(insurance, dict):
+                for key, value in insurance.items():
+                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+            else:
+                lines.append(f"  INSURANCE       : {safe_str(insurance)}")
+            lines.append("")
 
-    # TECHNICAL section
-    if technical:
-        lines.append("=" * 50)
-        lines.append("  TECHNICAL DETAILS")
-        lines.append("-" * 50)
-        if isinstance(technical, dict):
-            for key, value in technical.items():
-                lines.append(f"  {key.upper():<18}: {safe_str(value)}")
-        else:
-            lines.append(f"  TECHNICAL       : {safe_str(technical)}")
-        lines.append("")
+        # TECHNICAL section
+        if technical and any(technical.values()):
+            lines.append("=" * 50)
+            lines.append("  TECHNICAL DETAILS")
+            lines.append("-" * 50)
+            if isinstance(technical, dict):
+                for key, value in technical.items():
+                    if value: lines.append(f"  {key.upper():<18}: {safe_str(value)}")
+            else:
+                lines.append(f"  TECHNICAL       : {safe_str(technical)}")
+            lines.append("")
 
-    # Fallback: print all remaining keys
-    if not owner and not vehicle and not insurance and not technical:
+    # If nothing worked, dump all data as fallback
+    if not any(vehicle_data.get(k) for k in ["regNo", "owner", "manufacturer", "vehicle"]):
         lines.append("=" * 50)
         lines.append("  VEHICLE DATA")
         lines.append("-" * 50)
         for key, value in vehicle_data.items():
-            if isinstance(value, dict):
+            if isinstance(value, dict) and key != "data":
                 lines.append(f"  {key.upper():<18}:")
                 for k2, v2 in value.items():
-                    lines.append(f"    {k2.upper():<16}: {safe_str(v2)}")
+                    if v2: lines.append(f"    {k2.upper():<16}: {safe_str(v2)}")
             elif isinstance(value, list):
                 lines.append(f"  {key.upper():<18}: ({len(value)} items)")
             else:
@@ -992,7 +1007,7 @@ class VehicleReportPDF(OSINTReportPDF):
 def generate_vehicle_pdf(data: dict) -> io.BytesIO:
     """Generate PDF for vehicle registration data."""
     plate = data.get("vehicle_plate", "N/A")
-    vehicle_data = data.get("vehicle_data", {})
+    vehicle_data = _normalize_vehicle_data(data.get("vehicle_data", {}))
 
     pdf = VehicleReportPDF()
     pdf.alias_nb_pages()
@@ -1013,7 +1028,7 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
                 "name": vehicle_data.get("owner"),
                 "father_name": vehicle_data.get("fatherName"),
                 "mobile": vehicle_data.get("mobileNumber"),
-                "address": vehicle_data.get("presentAddress"),
+                "address": vehicle_data.get("presentAddress") or vehicle_data.get("permAddress"),
             }
             vehicle = {
                 "reg_no": vehicle_data.get("regNo"),
@@ -1024,15 +1039,19 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
                 "color": vehicle_data.get("color"),
                 "class": vehicle_data.get("vehicleClass"),
                 "mfg_year": vehicle_data.get("manufacturerYear"),
+                "reg_date": vehicle_data.get("regDate"),
+                "rto_code": vehicle_data.get("rtoCode"),
             }
             insurance = {
                 "insurer": vehicle_data.get("insuranceCompanyName"),
+                "policy_number": vehicle_data.get("insurancePolicyNumber"),
                 "insurance_upto": vehicle_data.get("insuranceUpto"),
             }
             technical = {
-                "chassis_no": vehicle_data.get("chassisNumber"),
-                "engine_no": vehicle_data.get("engineNumber"),
+                "chassis_no": vehicle_data.get("chassisNumber") or vehicle_data.get("chassis"),
+                "engine_no": vehicle_data.get("engineNumber") or vehicle_data.get("engine"),
                 "engine_cc": vehicle_data.get("cubicCapacity"),
+                "financier": vehicle_data.get("financerName"),
                 "tax_upto": vehicle_data.get("mvTaxUpto"),
                 "fitness_upto": vehicle_data.get("fitnessUpto"),
             }
@@ -1041,8 +1060,9 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
         pdf.section_header("OWNER DETAILS", NEON_GREEN)
         if isinstance(owner, dict):
             for key, value in owner.items():
-                color = NEON_GREEN if key.lower() in ["name", "owner_name"] else TEXT_WHITE
-                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+                if value:
+                    color = NEON_GREEN if key.lower() in ["name", "owner_name"] else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
         else:
             pdf.label_value("Owner", safe_str(owner), value_color=NEON_GREEN)
         pdf.ln(2)
@@ -1053,8 +1073,9 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
         pdf.section_header("VEHICLE DETAILS", NEON_CYAN)
         if isinstance(vehicle, dict):
             for key, value in vehicle.items():
-                color = NEON_YELLOW if key.lower() in ["registration_number", "reg_no"] else TEXT_WHITE
-                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+                if value:
+                    color = NEON_YELLOW if key.lower() in ["registration_number", "reg_no"] else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
         else:
             pdf.label_value("Vehicle", safe_str(vehicle), value_color=NEON_CYAN)
         pdf.ln(2)
@@ -1065,8 +1086,9 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
         pdf.section_header("INSURANCE DETAILS", NEON_PURPLE)
         if isinstance(insurance, dict):
             for key, value in insurance.items():
-                color = NEON_YELLOW if key.lower() in ["policy_number"] else TEXT_WHITE
-                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+                if value:
+                    color = NEON_YELLOW if key.lower() in ["policy_number"] else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
         else:
             pdf.label_value("Insurance", safe_str(insurance), value_color=NEON_PURPLE)
         pdf.ln(2)
@@ -1077,21 +1099,22 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
         pdf.section_header("TECHNICAL DETAILS", NEON_YELLOW)
         if isinstance(technical, dict):
             for key, value in technical.items():
-                color = NEON_RED if "chassis" in key.lower() or "engine" in key.lower() else TEXT_WHITE
-                pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
+                if value:
+                    color = NEON_RED if "chassis" in key.lower() or "engine" in key.lower() else TEXT_WHITE
+                    pdf.label_value(key.replace("_", " ").title(), safe_str(value), value_color=color)
         else:
             pdf.label_value("Technical", safe_str(technical), value_color=NEON_YELLOW)
         pdf.ln(2)
         pdf.divider()
 
     # Fallback: print all data
-    if not owner and not vehicle and not insurance and not technical:
+    if not (owner and any(v for v in owner.values() if isinstance(v, str))) and not (vehicle and any(v for v in vehicle.values() if isinstance(v, str))):
         pdf.section_header("VEHICLE DATA", NEON_CYAN)
         for key, value in vehicle_data.items():
+            if key == "data":
+                continue
             if isinstance(value, dict):
-                pdf.section_header(key.replace("_", " ").upper(), NEON_GREEN)
-                for k2, v2 in value.items():
-                    pdf.label_value(k2.replace("_", " ").title(), safe_str(v2))
+                continue
             elif isinstance(value, list):
                 pdf.label_value(key.replace("_", " ").title(), f"({len(value)} items)")
             else:
