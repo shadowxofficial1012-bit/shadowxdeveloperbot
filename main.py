@@ -10,6 +10,7 @@ from telegram.ext import (
 from telegram.error import Conflict, TimedOut, NetworkError
 
 import database as db
+import api_client
 from config import BOT_TOKEN, ADMIN_IDS, API_RELAY_URL
 from handlers import (
     start,
@@ -29,6 +30,7 @@ from handlers import (
     check_user_channels,
     handle_upi_lookup,
     handle_vehicle_lookup,
+    status_command,
 )
 from keyboards import required_channels_keyboard
 from admin import (
@@ -176,6 +178,7 @@ async def handle_text(update: Update, context):
         "🎁 Create Code": admin_create_code,
         "📋 View All Codes": admin_view_codes,
         "📢 Broadcast": admin_broadcast,
+        "🏥 API Health": status_command,
         "🏠 Main Menu": admin_start,
     }
 
@@ -267,6 +270,7 @@ def main():
     app.add_handler(CommandHandler("reject", handle_reject_command, filters=private_filter))
     app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
     app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
+    app.add_handler(CommandHandler("status", status_command, filters=private_filter))
 
     # Callback handler (inline buttons)
     # Note: CallbackQueryHandler in v21.0 does not support `filters`.
@@ -285,6 +289,13 @@ def main():
 
     print("🚀 Phone OSINT Bot is starting...")
     print(f"👤 Admin IDs: {ADMIN_IDS}")
+
+    # Start background health monitor with bot instance for admin notifications
+    if app.job_queue:
+        api_client.start_health_monitor(app.job_queue, bot=app.bot)
+    else:
+        logger.warning("JobQueue not available — health monitor disabled. Install python-telegram-bot[job-queue].")
+
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,

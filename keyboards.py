@@ -26,7 +26,7 @@ def admin_keyboard():
         [KeyboardButton("✅ Activate Plan"), KeyboardButton("💳 Add Credits")],
         [KeyboardButton("👤 Check User"), KeyboardButton("🎁 Create Code")],
         [KeyboardButton("📋 View All Codes"), KeyboardButton("📢 Broadcast")],
-        [KeyboardButton("🏠 Main Menu")],
+        [KeyboardButton("🏥 API Health"), KeyboardButton("🏠 Main Menu")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 

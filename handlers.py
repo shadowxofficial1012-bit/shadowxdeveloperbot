@@ -234,6 +234,65 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /status command - check API health for all endpoints."""
+    user = update.effective_user
+
+    loading_msg = await update.message.reply_text(
+        "🏥 <b>Checking API Health...</b>\n"
+        "Pinging all endpoints, please wait...",
+        parse_mode="HTML",
+    )
+
+    results = await api_client.check_api_health()
+
+    lines = []
+    lines.append("🏥 <b>API Health Status</b>")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("")
+
+    for r in results:
+        status = r["status"]
+        name = r["name"]
+        ms = r["ms"]
+        detail = r["detail"]
+
+        if status == "ok":
+            icon = "✅"
+            speed = "⚡" if ms < 1000 else "🟡" if ms < 3000 else "🐌"
+            lines.append(f"{icon} <b>{name}</b> — {speed} {ms}ms")
+        elif status == "blocked":
+            lines.append(f"🚫 <b>{name}</b> — BLOCKED (403)")
+        elif status == "timeout":
+            lines.append(f"⏰ <b>{name}</b> — TIMEOUT ({ms}ms)")
+        else:
+            lines.append(f"❌ <b>{name}</b> — ERROR: {detail}")
+
+    lines.append("")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+
+    # Summary
+    ok_count = sum(1 for r in results if r["status"] == "ok")
+    blocked_count = sum(1 for r in results if r["status"] == "blocked")
+    error_count = sum(1 for r in results if r["status"] in ("error", "timeout"))
+    total = len(results)
+
+    if ok_count == total:
+        lines.append("🟢 <b>All systems operational</b>")
+    elif blocked_count > 0 and error_count == 0:
+        lines.append(f"🟡 <b>{blocked_count}</b> endpoint(s) blocked — data may be partial")
+    elif error_count > 0 and blocked_count == 0:
+        lines.append(f"🔴 <b>{error_count}</b> endpoint(s) down — please try again later")
+    else:
+        lines.append(f"🔴 <b>{blocked_count + error_count}</b> endpoint(s) with issues")
+
+    lines.append(f"")
+    lines.append(f"📊 {ok_count}/{total} endpoints healthy")
+
+    text = "\n".join(lines)
+    await loading_msg.edit_text(text, parse_mode="HTML", reply_markup=main_menu_keyboard())
+
+
 async def contact_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 🤳 Contact Admin button."""
     text = (
@@ -1109,11 +1168,23 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Call BOTH endpoints in parallel for complete data:
     # /api/number  -> detailed records (name, address, SIM, etc.)
     # /api/numleak -> breach/leak data + calltracer
-    result_number, result_leak = await asyncio.gather(
-        api_client.lookup_number(phone_number, timeout=10),
-        api_client.lookup_numleak(phone_number, timeout=10),
-        return_exceptions=True,
-    )
+    try:
+        result_number, result_leak = await asyncio.wait_for(
+            asyncio.gather(
+                api_client.lookup_number(phone_number, timeout=20),
+                api_client.lookup_numleak(phone_number, timeout=20),
+                return_exceptions=True,
+            ),
+            timeout=30
+        )
+    except asyncio.TimeoutError:
+        await loading_msg.edit_text(
+            f"⏰ <b>Request Timeout</b>\n\n"
+            f"The phone lookup for <code>{phone_number}</code> took too long.\n"
+            "The API servers may be slow. Please try again later.",
+            parse_mode="HTML",
+        )
+        return
 
     # Handle exceptions from gather (return_exceptions=True wraps them)
     if isinstance(result_number, Exception):
@@ -1123,8 +1194,8 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Numleak API exception: {result_leak}")
         result_leak = {"success": False, "error": str(result_leak)}
 
-    logger.info(f"Number API: success={result_number.get('success')}, error={result_number.get('error')}")
-    logger.info(f"Numleak API: success={result_leak.get('success')}, error={result_leak.get('error')}")
+    logger.info(f"Number API: success={result_number.get('success')}, error={result_number.get('raw_error', result_number.get('error'))}")
+    logger.info(f"Numleak API: success={result_leak.get('success')}, error={result_leak.get('raw_error', result_leak.get('error'))}")
 
     # Extract raw data from both endpoints
     number_data_raw = result_number.get("data", {}) if result_number.get("success") else {}
@@ -1330,29 +1401,29 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Fetch numtoupi data with 10-second timeout
+    # Fetch numtoupi data with generous timeout (APIs can be slow)
     try:
         result_upi = await asyncio.wait_for(
             api_client.lookup_numtoupi(phone_number),
-            timeout=10
+            timeout=30
         )
     except asyncio.TimeoutError:
         await loading_msg.edit_text(
             f"⏰ <b>Request Timeout</b>\n\n"
-            f"The lookup for <code>{phone_number}</code> timed out after 10 seconds.\n"
-            "Please try again later or contact @HATHI02.",
+            f"The UPI lookup for <code>{phone_number}</code> took too long.\n"
+            "The API server may be slow. Please try again later.",
             parse_mode="HTML",
         )
         return
 
-    logger.info(f"Numtoupi API: success={result_upi['success']}, error={result_upi.get('error')}")
+    logger.info(f"Numtoupi API: success={result_upi['success']}, error={result_upi.get('raw_error', result_upi.get('error'))}")
 
     if not result_upi["success"]:
         err_upi = result_upi.get('error', 'Unknown')
         await loading_msg.edit_text(
-            f"❌ <b>Lookup Failed</b>\n\n"
+            f"❌ <b>UPI Lookup Failed</b>\n\n"
             f"Error: {err_upi}\n\n"
-            "Please try again later or contact @HATHI02.",
+            "Please try again later.",
             parse_mode="HTML",
         )
         return
@@ -1531,29 +1602,29 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
         parse_mode="HTML",
     )
 
-    # Fetch vehicle data with 10-second timeout
+    # Fetch vehicle data with generous timeout (APIs can be slow)
     try:
         result_vehicle = await asyncio.wait_for(
             api_client.lookup_vehicle(vehicle_plate),
-            timeout=10
+            timeout=35
         )
     except asyncio.TimeoutError:
         await loading_msg.edit_text(
             f"⏰ <b>Request Timeout</b>\n\n"
-            f"The lookup for <code>{vehicle_plate}</code> timed out after 10 seconds.\n"
-            "Please try again later or contact @HATHI02.",
+            f"The vehicle lookup for <code>{vehicle_plate}</code> took too long.\n"
+            "The API server may be slow. Please try again later.",
             parse_mode="HTML",
         )
         return
 
-    logger.info(f"Vehicle API: success={result_vehicle['success']}, error={result_vehicle.get('error')}")
+    logger.info(f"Vehicle API: success={result_vehicle['success']}, error={result_vehicle.get('raw_error', result_vehicle.get('error'))}")
 
     if not result_vehicle["success"]:
         err_vehicle = result_vehicle.get('error', 'Unknown')
         await loading_msg.edit_text(
-            f"❌ <b>Lookup Failed</b>\n\n"
+            f"❌ <b>Vehicle Lookup Failed</b>\n\n"
             f"Error: {err_vehicle}\n\n"
-            "Please try again later or contact @HATHI02.",
+            "Please try again later.",
             parse_mode="HTML",
         )
         return
