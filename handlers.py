@@ -1404,7 +1404,7 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Fetch numtoupi data with generous timeout (APIs can be slow)
     try:
         result_upi = await asyncio.wait_for(
-            api_client.lookup_numtoupi(phone_number),
+            api_client.lookup_numtoupi(phone_number, timeout=25),
             timeout=30
         )
     except asyncio.TimeoutError:
@@ -1605,7 +1605,7 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
     # Fetch vehicle data with generous timeout (APIs can be slow)
     try:
         result_vehicle = await asyncio.wait_for(
-            api_client.lookup_vehicle(vehicle_plate),
+            api_client.lookup_vehicle(vehicle_plate, timeout=25),
             timeout=35
         )
     except asyncio.TimeoutError:

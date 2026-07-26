@@ -631,6 +631,24 @@ def generate_upi_text_report(data: dict) -> str:
                 lines.append(f"    TXN: {safe_str(tx)}")
             lines.append("")
 
+    # Fallback: dump all raw data if nothing was displayed
+    if not flat_fields and not accounts and not transactions:
+        lines.append("📊 Raw UPI Data")
+        lines.append("-" * 44)
+        for key, value in upi_data.items():
+            if isinstance(value, dict):
+                lines.append(f"  {key.replace('_', ' ').title()}:")
+                for k2, v2 in value.items():
+                    if isinstance(v2, (dict, list)):
+                        continue
+                    lines.append(f"    {k2.replace('_', ' ').title()}: {safe_str(v2)}")
+            elif isinstance(value, list):
+                if value:
+                    lines.append(f"  {key.replace('_', ' ').title()}: ({len(value)} items)")
+            else:
+                lines.append(f"  {key.replace('_', ' ').title()}: {safe_str(value)}")
+        lines.append("")
+
     lines.append("⚡ Powered by Hathi OSINT")
     return "\n".join(lines)
 

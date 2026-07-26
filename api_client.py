@@ -160,21 +160,56 @@ def _try_direct_with_headers(url: str, params: dict, timeout: int) -> dict:
         from curl_cffi import requests as cffi_requests
         # Try with different headers to bypass IP-based blocking
         alt_headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.google.com/search?q=osint+api",
+            "Origin": "https://www.google.com",
         }
-        logger.debug(f"Trying alt headers (android impersonation) for {url}")
-        resp = cffi_requests.get(
-            url, params=params, headers=alt_headers,
-            impersonate="android", timeout=timeout
-        )
-        if resp.status_code == 403:
-            logger.warning(f"Alt headers also got 403 for {url}")
-        elif resp.status_code == 200:
-            logger.debug(f"Alt headers returned 200 for {url}")
-        return _process_response(resp)
+        # Try different impersonation values supported by curl_cffi
+        # NOTE: "android" is NOT supported on all curl_cffi versions!
+        for imp in ["chrome110", "chrome124", "chrome"]:
+            try:
+                logger.debug(f"Trying alt headers (impersonate={imp}) for {url}")
+                resp = cffi_requests.get(
+                    url, params=params, headers=alt_headers,
+                    impersonate=imp, timeout=timeout
+                )
+                if resp.status_code == 403:
+                    logger.warning(f"Alt headers (impersonate={imp}) also got 403 for {url}")
+                    continue
+                elif resp.status_code == 200:
+                    logger.info(f"Alt headers (impersonate={imp}) returned 200 for {url}")
+                    return _process_response(resp)
+                else:
+                    logger.debug(f"Alt headers (impersonate={imp}) returned {resp.status_code} for {url}")
+                    return _process_response(resp)
+            except Exception as e:
+                err_msg = str(e)
+                # Skip unsupported impersonation values silently
+                if "not supported" in err_msg.lower():
+                    logger.debug(f"Impersonation '{imp}' not supported, trying next...")
+                    continue
+                logger.debug(f"Alt headers (impersonate={imp}) failed for {url}: {e}")
+                continue
+        # All impersonation attempts failed
+        logger.warning(f"All alt header attempts failed for {url}")
+        return {"success": False, "error": "All alternative header attempts failed"}
+    except ImportError:
+        # curl_cffi not available, fall back to requests library
+        try:
+            import requests
+            alt_headers = {
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.google.com/search?q=osint+api",
+            }
+            resp = requests.get(url, params=params, headers=alt_headers, timeout=timeout)
+            return _process_response(resp)
+        except Exception as e:
+            logger.warning(f"Alt headers request failed for {url}: {e}")
+            return {"success": False, "error": str(e)}
     except Exception as e:
         logger.warning(f"Alt headers request failed for {url}: {e}")
         return {"success": False, "error": str(e)}
