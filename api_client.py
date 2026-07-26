@@ -2,7 +2,7 @@ import logging
 import asyncio
 import time
 from typing import Optional
-from config import OSINT_API_NUMBER_URL, OSINT_API_NUMLEAK_URL, OSINT_API_NUMTOUPI_URL, OSINT_API_VEHICLE_URL, OSINT_API_KEY, API_RELAY_URL, ADMIN_IDS
+from config import OSINT_API_NUMLEAK_URL, OSINT_API_NUMTOUPI_URL, OSINT_API_VEHICLE_URL, OSINT_API_KEY, API_RELAY_URL, ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -257,17 +257,6 @@ async def _fetch_fast(url: str, params: dict, timeout: int = 15) -> dict:
     return await asyncio.to_thread(_fetch_with_fallback, url, params, timeout=timeout)
 
 
-async def lookup_number(number: str, timeout: int = 15) -> dict:
-    """Fetch phone number details (name, address, SIM etc) from the /api/number endpoint."""
-    params = {"key": OSINT_API_KEY, "num": number}
-    result = await _fetch_fast(OSINT_API_NUMBER_URL, params, timeout=timeout)
-    # Preserve raw error for logging, sanitize only for user display
-    if not result.get("success") and result.get("error") and not result.get("raw_error"):
-        result["raw_error"] = result["error"]
-        result["error"] = _sanitize_error(result["error"])
-    return result
-
-
 async def lookup_numleak(number: str, timeout: int = 15) -> dict:
     """Fetch phone number leak data from the /api/numleak endpoint."""
     params = {"key": OSINT_API_KEY, "num": number}
@@ -304,8 +293,7 @@ async def check_api_health() -> list[dict]:
     import time as _time
 
     endpoints = [
-        {"name": "Phone Lookup", "url": OSINT_API_NUMBER_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
-        {"name": "Numleak", "url": OSINT_API_NUMLEAK_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
+        {"name": "Numleak (Phone Lookup)", "url": OSINT_API_NUMLEAK_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
         {"name": "UPI Lookup", "url": OSINT_API_NUMTOUPI_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
         {"name": "Vehicle", "url": OSINT_API_VEHICLE_URL, "params": {"vehicle": "MH00AA0000"}, "timeout": 15},
     ]

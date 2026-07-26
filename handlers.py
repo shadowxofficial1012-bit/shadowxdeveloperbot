@@ -1165,73 +1165,42 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Call BOTH endpoints in parallel for complete data:
-    # /api/number  -> detailed records (name, address, SIM, etc.)
-    # /api/numleak -> breach/leak data + calltracer
+        # Single API call: numleak contains both phone info + leak data
     try:
-        result_number, result_leak = await asyncio.wait_for(
-            asyncio.gather(
-                api_client.lookup_number(phone_number, timeout=20),
-                api_client.lookup_numleak(phone_number, timeout=20),
-                return_exceptions=True,
-            ),
+        result_leak = await asyncio.wait_for(
+            api_client.lookup_numleak(phone_number, timeout=25),
             timeout=30
         )
     except asyncio.TimeoutError:
         await loading_msg.edit_text(
-            f"⏰ <b>Request Timeout</b>\n\n"
+            f"\u23f0 <b>Request Timeout</b>\n\n"
             f"The phone lookup for <code>{phone_number}</code> took too long.\n"
             "The API servers may be slow. Please try again later.",
             parse_mode="HTML",
         )
         return
 
-    # Handle exceptions from gather (return_exceptions=True wraps them)
-    if isinstance(result_number, Exception):
-        logger.error(f"Number API exception: {result_number}")
-        result_number = {"success": False, "error": str(result_number)}
     if isinstance(result_leak, Exception):
         logger.error(f"Numleak API exception: {result_leak}")
         result_leak = {"success": False, "error": str(result_leak)}
 
-    logger.info(f"Number API: success={result_number.get('success')}, error={result_number.get('raw_error', result_number.get('error'))}")
     logger.info(f"Numleak API: success={result_leak.get('success')}, error={result_leak.get('raw_error', result_leak.get('error'))}")
 
-    # Extract raw data from both endpoints
-    number_data_raw = result_number.get("data", {}) if result_number.get("success") else {}
     numleak_data_raw = result_leak.get("data", {}) if result_leak.get("success") else {}
 
-    # Handle nested response formats: {"data": {"results": [...]}} or {"results": [...]
-    if not number_data_raw.get("results") and number_data_raw.get("data"):
-        nested = number_data_raw["data"]
-        if isinstance(nested, dict) and nested.get("results"):
-            number_data_raw = nested  # unwrap nested data
+    # Check if we got useful data
+    has_leak_data = bool(
+        numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer") or
+        numleak_data_raw.get("results") or numleak_data_raw.get("data") or
+        (isinstance(numleak_data_raw, dict) and len(numleak_data_raw) > 0)
+    )
 
-    # Check if we got ANY useful data from either endpoint
-    has_number_data = bool(number_data_raw.get("results"))
-    has_leak_data = bool(numleak_data_raw.get("chain") or numleak_data_raw.get("calltracer"))
+    logger.info(f"Data check: has_leak_data={has_leak_data}")
 
-    logger.info(f"Data check: has_number_data={has_number_data}, has_leak_data={has_leak_data}")
-
-    # If data is not in expected keys, check if data exists at all
-    if not has_number_data and number_data_raw and isinstance(number_data_raw, dict) and len(number_data_raw) > 0:
-        # The API returned something, just not in the expected nested format
-        # Mark as data found so we still display it
-        has_number_data = True
-
-    if not has_leak_data and numleak_data_raw and isinstance(numleak_data_raw, dict) and len(numleak_data_raw) > 0:
-        has_leak_data = True
-
-    if not has_number_data and not has_leak_data:
-        # Both endpoints failed or returned no data
-        err_msgs = []
-        if not result_number.get("success"):
-            err_msgs.append(f"Number API: {result_number.get('error', 'no data')}")
-        if not result_leak.get("success"):
-            err_msgs.append(f"Numleak API: {result_leak.get('error', 'no data')}")
-        err_detail = " | ".join(err_msgs) if err_msgs else "Unknown"
+    if not has_leak_data:
+        err_detail = result_leak.get("error", "no data") if not result_leak.get("success") else "No data found"
         await loading_msg.edit_text(
-            f"❌ <b>No data found</b> for <code>{phone_number}</code>.\n\n"
+            f"\u274c <b>No data found</b> for <code>{phone_number}</code>.\n\n"
             f"Error: {err_detail}\n\n"
             "The number may not exist in the database or the API is rate limited.",
             parse_mode="HTML",
@@ -1245,13 +1214,10 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     combined_data = {
         "number": phone_number,
-        "number_data": number_data_raw,
         "numleak_data": numleak_data_raw,
         "lookup_type": "numleak",
     }
 
-    db.log_lookup(user.id, phone_number, True)
-    db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
 
     try:
         await loading_msg.delete()
