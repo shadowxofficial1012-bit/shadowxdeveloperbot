@@ -1647,15 +1647,14 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     from pdf_exporter import generate_text_report, generate_osint_pdf
-    import html as html_mod
     
     text_report = generate_text_report(combined_data)
-    escaped_report = html_mod.escape(text_report)
+    escaped_report = escape_html(text_report)
     code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = html_mod.escape(text_report[:3800])
-        part2 = html_mod.escape(text_report[3800:])
+        part1 = escape_html(text_report[:3800])
+        part2 = escape_html(text_report[3800:])
         await update.message.reply_text(
             f"<pre>{part1}</pre>",
             parse_mode="HTML",
@@ -1865,14 +1864,13 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Generate text report
     from pdf_exporter import generate_upi_text_report
-    import html as html_mod
     text_report = generate_upi_text_report(combined_data)
-    escaped_report = html_mod.escape(text_report)
+    escaped_report = escape_html(text_report)
     code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = html_mod.escape(text_report[:3800])
-        part2 = html_mod.escape(text_report[3800:])
+        part1 = escape_html(text_report[:3800])
+        part2 = escape_html(text_report[3800:])
         await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
         if part2:
             await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
@@ -2074,14 +2072,13 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Generate text report
     from pdf_exporter import generate_vehicle_text_report
-    import html as html_mod
     text_report = generate_vehicle_text_report(combined_data)
-    escaped_report = html_mod.escape(text_report)
+    escaped_report = escape_html(text_report)
     code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = html_mod.escape(text_report[:3800])
-        part2 = html_mod.escape(text_report[3800:])
+        part1 = escape_html(text_report[:3800])
+        part2 = escape_html(text_report[3800:])
         await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
         if part2:
             await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
