@@ -247,7 +247,7 @@ def _fetch_with_fallback(url: str, params: dict, timeout: int = 15, max_retries:
                 return alt_result
         if attempt < max_retries - 1:
             logger.info(f"Retry {attempt + 1}/{max_retries} for {url}")
-            time.sleep(2)  # 2s delay between retries to avoid hammering the API
+            time.sleep(1)  # 1s delay between retries
     # Store raw error for logging, sanitize for user display
     return {"success": False, "error": _sanitize_error(last_error or "All retries failed"), "raw_error": last_raw_error}
 
@@ -301,7 +301,8 @@ async def check_api_health() -> list[dict]:
     if API_RELAY_URL:
         endpoints.append({"name": "Relay Proxy", "url": API_RELAY_URL + "/health", "params": {}, "timeout": 10})
 
-    async def _check_one(ep: dict) -> dict:
+    def _check_one_sync(ep: dict) -> dict:
+        """Synchronous health check for a single endpoint."""
         start = _time.time()
         try:
             from curl_cffi import requests as cffi_requests
@@ -327,8 +328,11 @@ async def check_api_health() -> list[dict]:
                 return {"name": ep["name"], "status": "timeout", "ms": elapsed_ms, "detail": "Timed out"}
             return {"name": ep["name"], "status": "error", "ms": elapsed_ms, "detail": err[:60]}
 
-    # Run all checks in parallel
-    results = await asyncio.gather(*[_check_one(ep) for ep in endpoints], return_exceptions=True)
+    # Run all checks in parallel using to_thread to avoid blocking event loop
+    async def _check_one_async(ep: dict) -> dict:
+        return await asyncio.to_thread(_check_one_sync, ep)
+
+    results = await asyncio.gather(*[_check_one_async(ep) for ep in endpoints], return_exceptions=True)
     final = []
     for r in results:
         if isinstance(r, Exception):
