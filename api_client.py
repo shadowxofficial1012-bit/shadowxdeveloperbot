@@ -279,7 +279,7 @@ async def lookup_numtoupi(number: str, timeout: int = 15) -> dict:
 
 async def lookup_vehicle(plate: str, timeout: int = 25) -> dict:
     """Fetch vehicle registration details from the vehicle API endpoint."""
-    params = {"vehicle": plate}
+    params = {"vehicle": plate, "key": OSINT_API_KEY}
     result = await _fetch_fast(OSINT_API_VEHICLE_URL, params, timeout=timeout)
     if not result.get("success") and result.get("error") and not result.get("raw_error"):
         result["raw_error"] = result["error"]

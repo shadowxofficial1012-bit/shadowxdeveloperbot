@@ -10,7 +10,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8426678718:AAHmYodZH82VD2DOq60vFwXoJSwfG8eLt
 # OSINT APIs - numleak is the primary phone lookup (contains both number info + leak data)
 OSINT_API_NUMLEAK_URL = os.getenv("OSINT_API_NUMLEAK_URL", "https://ft-osint-api.duckdns.org/api/numleak")
 OSINT_API_NUMTOUPI_URL = os.getenv("OSINT_API_NUMTOUPI_URL", "https://ft-osint-api.duckdns.org/api/numtoupi")
-OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://vh-num.vercel.app/fetch")
+OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://ft-osint-api.duckdns.org/api/vehicle")
 OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
 
 # API relay proxy URL (bypasses Railway network restrictions)
