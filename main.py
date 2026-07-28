@@ -31,6 +31,7 @@ from handlers import (
     handle_upi_lookup,
     handle_vehicle_lookup,
     status_command,
+    handle_userdata_command,
 )
 from keyboards import required_channels_keyboard
 from admin import (
@@ -51,6 +52,14 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+async def _periodic_sync_job(context) -> None:
+    """Async wrapper for periodic SQLite ↔ JSON sync."""
+    try:
+        db.periodic_sync()
+    except Exception as e:
+        logger.error(f"Periodic sync failed: {e}")
 
 
 async def error_handler(update: object, context) -> None:
@@ -254,6 +263,10 @@ def main():
     db.init_db()
     print("✅ Database initialized")
 
+    # Sync subscription data from user_data.json into SQLite
+    # This ensures data survives redeployments where .db file may be lost
+    db.sync_from_json()
+
     app = ApplicationBuilder().token(BOT_TOKEN).get_updates_read_timeout(10).get_updates_connect_timeout(10).build()
 
     # Only respond in private chats (DMs) - ignore all group messages/commands
@@ -271,6 +284,7 @@ def main():
     app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
     app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
     app.add_handler(CommandHandler("status", status_command, filters=private_filter))
+    app.add_handler(CommandHandler("userdata", handle_userdata_command, filters=private_filter))
 
     # Callback handler (inline buttons)
     # Note: CallbackQueryHandler in v21.0 does not support `filters`.
@@ -293,8 +307,17 @@ def main():
     # Start background health monitor with bot instance for admin notifications
     if app.job_queue:
         api_client.start_health_monitor(app.job_queue, bot=app.bot)
+
+        # Start periodic SQLite ↔ JSON sync every 5 minutes
+        app.job_queue.run_repeating(
+            _periodic_sync_job,
+            interval=300,  # 5 minutes
+            first=60,  # First sync 60 seconds after startup
+            name="periodic_data_sync",
+        )
+        logger.info("[Sync] Periodic SQLite ↔ JSON sync started (interval: 5 min)")
     else:
-        logger.warning("JobQueue not available — health monitor disabled. Install python-telegram-bot[job-queue].")
+        logger.warning("JobQueue not available — health monitor & sync disabled. Install python-telegram-bot[job-queue].")
 
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,

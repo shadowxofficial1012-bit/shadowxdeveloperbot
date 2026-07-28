@@ -293,7 +293,7 @@ def generate_osint_pdf(data: dict) -> io.BytesIO:
     pdf.divider()
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(*TEXT_DIM)
-    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+    pdf.cell(0, 4, f"  Owner: @HATHI02 | Developer: @shadowxdeveloper", ln=True)
 
     # Save to BytesIO
     buffer = io.BytesIO()
@@ -453,7 +453,7 @@ def generate_text_report(data: dict) -> str:
         lines.append("No data found for this number.")
         lines.append("")
 
-    lines.append("⚡ Powered by Hathi OSINT")
+    lines.append("⚡ Owner: @HATHI02 | Developer: @shadowxdeveloper")
     return "\n".join(lines)
 
 
@@ -528,7 +528,7 @@ def generate_numleak_text_report(data: dict) -> str:
         lines.append("")
 
     lines.append("═" * 50)
-    lines.append(f"  Powered by @HATHI02")
+    lines.append(f"  Owner: @HATHI02 | Developer: @shadowxdeveloper")
     return "\n".join(lines)
 
 
@@ -544,95 +544,117 @@ def generate_upi_text_report(data: dict) -> str:
     lines.append(f"📞 Number: {number}")
     lines.append("")
 
-    # Handle flat vs nested response format
-    flat_fields = {}
-    # Check nested data.accounts FIRST, then top-level accounts
-    accounts = (upi_data.get("data", {}).get("accounts", []) if isinstance(upi_data.get("data"), dict) else []) or upi_data.get("accounts", [])
-    transactions = (upi_data.get("data", {}).get("transactions", []) if isinstance(upi_data.get("data"), dict) else []) or upi_data.get("transactions", [])
+    # Handle the actual API format: {success, phone, vpas, details, upi_details, by, owner}
+    # Also handle legacy nested formats
+    accounts = upi_data.get("accounts", [])
+    transactions = upi_data.get("transactions", [])
+    vpas = upi_data.get("vpas", [])
+    details = upi_data.get("details", [])
+    upi_details = upi_data.get("upi_details", [])
 
-    # Collect all flat fields
-    for d in [upi_data, upi_data.get("data", {}) if isinstance(upi_data.get("data"), dict) else {}]:
-        for k, v in d.items():
-            if k in ["accounts", "transactions", "data"]:
+    # Top-level scalar fields (phone, success, by, owner, etc.)
+    for key, value in upi_data.items():
+        if key in ["accounts", "transactions", "vpas", "details", "upi_details", "data"]:
+            continue
+        if isinstance(value, (dict, list)):
+            continue
+        if value and str(value) not in ["", "N/A", "None", "false", "true"]:
+            # Replace API owner name with our branding
+            if key in ["by", "owner"]:
                 continue
-            if isinstance(v, (dict, list)):
-                continue
-            if v and str(v) not in ["", "N/A", "None"]:
-                flat_fields[k.lower()] = str(v)
+            emoji_map = {
+                "phone": "📞", "num": "📞", "number": "📞",
+                "success": "✅", "response_time_ms": "⏱",
+            }
+            emoji = emoji_map.get(key, "🔹")
+            label = key.replace("_", " ").title()
+            lines.append(f"{emoji} {label}: {safe_str(value)}")
 
-    # Display UPI fields with smart emoji mapping
-    emoji_map = {
-        "phone": "📞", "number": "📞", "num": "📞",
-        "upi": "💳", "vpa": "💳", "upi_id": "💳", "upi id": "💳",
-        "name": "👤", "holder_name": "👤", "account_holder": "👤", "owner": "👤",
-        "app": "📱", "app_name": "📱",
-        "bank": "🏦", "bank_name": "🏦",
-        "valid": "✅", "status": "✅",
-        "ifsc": "📋",
-        "account_type": "👤", "type": "👤",
-        "branch": "🏛",
-        "address": "📍", "location": "📍",
-        "city": "🏙",
-        "success": "✅", "response": "⏳",
-        "by": "👤", "owner": "👤",
-    }
+    # VPA / UPI IDs section
+    if vpas:
+        lines.append("")
+        lines.append("💳 LINKED UPI IDs")
+        lines.append("-" * 44)
+        for i, vpa in enumerate(vpas[:10], 1):
+            if isinstance(vpa, dict):
+                lines.append(f"  >> VPA #{i} <<")
+                for key, value in vpa.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    emoji = "💳" if "vpa" in key.lower() or "upi" in key.lower() else "🔹"
+                    lines.append(f"    {emoji} {key.replace('_', ' ').title()}: {safe_str(value)}")
+            else:
+                lines.append(f"  💳 VPA: {safe_str(vpa)}")
+        lines.append("")
 
-    # Order keys for display
-    key_order = ["phone", "number", "num", "vpa", "upi_id", "upi", "upi id", "name", "holder_name",
-                 "account_holder", "app", "app_name", "bank", "bank_name", "valid", "status",
-                 "ifsc", "account_type", "type", "branch", "address", "city", "location", "success"]
+    # UPI Details section
+    if upi_details:
+        lines.append("📊 UPI DETAILS")
+        lines.append("-" * 44)
+        for i, detail in enumerate(upi_details[:10], 1):
+            if isinstance(detail, dict):
+                lines.append(f"  >> Detail #{i} <<")
+                for key, value in detail.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
+            else:
+                lines.append(f"  📋 {safe_str(detail)}")
+        lines.append("")
 
-    displayed = set()
-    for k in key_order:
-        if k in flat_fields and k not in displayed:
-            emoji = emoji_map.get(k, "🔹")
-            label = k.replace("_", " ").title()
-            lines.append(f"{emoji} {label}: {flat_fields[k]}")
-            displayed.add(k)
+    # Details / accounts section
+    if details:
+        lines.append("🔍 ACCOUNT DETAILS")
+        lines.append("-" * 44)
+        for i, acc in enumerate(details[:10], 1):
+            if isinstance(acc, dict):
+                lines.append(f"  >> Account #{i} <<")
+                for key, value in acc.items():
+                    if isinstance(value, (dict, list)):
+                        continue
+                    lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
+            else:
+                lines.append(f"    Detail: {safe_str(acc)}")
+        lines.append("")
 
-    # Remaining fields
-    for k, v in flat_fields.items():
-        if k not in displayed:
-            emoji = emoji_map.get(k, "🔹")
-            label = k.replace("_", " ").title()
-            lines.append(f"{emoji} {label}: {v}")
-
-    lines.append("")
-
-    # Accounts section
-    if accounts:
-        lines.append("=" * 44)
-        lines.append("  LINKED UPI ACCOUNTS")
+    # Legacy accounts format
+    if accounts and not details:
+        lines.append("💳 LINKED UPI ACCOUNTS")
         lines.append("-" * 44)
         for i, acc in enumerate(accounts[:10], 1):
-            lines.append(f"  >> Account #{i} <<")
             if isinstance(acc, dict):
+                lines.append(f"  >> Account #{i} <<")
                 for key, value in acc.items():
                     if isinstance(value, (dict, list)):
                         continue
                     lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
             else:
                 lines.append(f"    UPI ID: {safe_str(acc)}")
-            lines.append("")
+        lines.append("")
 
-    # Transactions section
+    # Transactions
     if transactions:
-        lines.append("=" * 44)
-        lines.append("  TRANSACTION HISTORY")
+        lines.append("📊 TRANSACTION HISTORY")
         lines.append("-" * 44)
         for i, tx in enumerate(transactions[:10], 1):
-            lines.append(f"  >> Transaction #{i} <<")
             if isinstance(tx, dict):
+                lines.append(f"  >> Transaction #{i} <<")
                 for key, value in tx.items():
                     if isinstance(value, (dict, list)):
                         continue
                     lines.append(f"    {key.replace('_', ' ').title()}: {safe_str(value)}")
             else:
                 lines.append(f"    TXN: {safe_str(tx)}")
-            lines.append("")
+        lines.append("")
 
     # Fallback: dump all raw data if nothing was displayed
-    if not flat_fields and not accounts and not transactions:
+    has_displayed = any(upi_data.get(k) for k in ["vpas", "details", "upi_details", "accounts", "transactions"])
+    has_scalars = any(
+        v and str(v) not in ["", "N/A", "None", "false", "true"]
+        for k, v in upi_data.items()
+        if k not in ["vpas", "details", "upi_details", "accounts", "transactions", "data"] and not isinstance(v, (dict, list))
+    )
+    if not has_displayed and not has_scalars:
         lines.append("📊 Raw UPI Data")
         lines.append("-" * 44)
         for key, value in upi_data.items():
@@ -649,7 +671,7 @@ def generate_upi_text_report(data: dict) -> str:
                 lines.append(f"  {key.replace('_', ' ').title()}: {safe_str(value)}")
         lines.append("")
 
-    lines.append("⚡ Powered by Hathi OSINT")
+    lines.append("⚡ Owner: @HATHI02 | Developer: @shadowxdeveloper")
     return "\n".join(lines)
 
 
@@ -667,194 +689,181 @@ def _normalize_vehicle_data(vehicle_data: dict) -> dict:
 
 
 def generate_vehicle_text_report(data: dict) -> str:
-    """Generate a clean emoji-style text report for vehicle lookup."""
+    """Generate a clean emoji-style text report for vehicle lookup matching the screenshot format."""
     plate = data.get("vehicle_plate", "N/A")
     vehicle_data = _normalize_vehicle_data(data.get("vehicle_data", {}))
 
+    # _normalize_vehicle_data already merges nested 'data' key into top level
+    vd = vehicle_data
+
     lines = []
-    lines.append("🚗 Vehicle Lookup Result")
+    lines.append("📋 VEHICLE SEARCH REPORT")
     lines.append("━━━━━━━━━━━━━━━━━━━━")
     lines.append(f"🔢 Plate: {plate}")
     lines.append("")
 
-    # Flat API format (vh-num.vercel.app)
-    if vehicle_data.get("regNo") or vehicle_data.get("owner"):
-        # Vehicle details
-        lines.append("🚗 Vehicle Details")
-        lines.append("-" * 40)
-        mapping = [
-            ("🔢", "regNo", "Reg No"),
-            ("🚗", "vehicle", "Vehicle"),
-            ("🏭", "manufacturer", "Manufacturer"),
-            ("📅", "manufacturerYear", "Year"),
-            ("💨", "variant", "Variant"),
-            ("⛽", "fuelType", "Fuel"),
-            ("🎨", "color", "Color"),
-            ("🎶", "vehicleClass", "Class"),
-            ("💺", "seatCapacity", "Seats"),
-            ("🏛", "rtoCode", "RTO"),
-            ("📅", "regDate", "Reg Date"),
-        ]
-        for emoji, key, label in mapping:
-            v = vehicle_data.get(key)
-            if v:
-                lines.append(f"{emoji} {label}: {safe_str(v)}")
+    has_any_data = False
 
-        lines.append("")
-        # Owner details
-        owner_name = vehicle_data.get("owner")
+    # === OWNER DETAILS ===
+    owner_name = vd.get("owner") or vd.get("ownerName")
+    address = vd.get("presentAddress") or vd.get("permAddress") or vd.get("address")
+    mobile = vd.get("mobileNumber")
+    father = vd.get("ownerFatherName") or vd.get("fatherName")
+
+    if owner_name or address:
+        has_any_data = True
+        lines.append('👤 OWNER DETAILS ”')
+        lines.append("-" * 40)
         if owner_name:
-            lines.append(f"👤 Owner: {safe_str(owner_name)}")
-            mobile = vehicle_data.get("mobileNumber")
-            if mobile:
-                lines.append(f"📞 Mobile: {safe_str(mobile)}")
-            addr = vehicle_data.get("presentAddress") or vehicle_data.get("permAddress") or vehicle_data.get("address")
-            if addr:
-                lines.append(f"📍 Address: {safe_str(addr)}")
-            financer = vehicle_data.get("financerName")
-            if financer:
-                lines.append(f"🏦 Financer: {safe_str(financer)}")
-
+            lines.append(f"👤 Owner Name: {safe_str(owner_name)}")
+        if father:
+            lines.append(f"👨 Father Name: {safe_str(father)}")
+        if address:
+            lines.append(f"🏠 Address: {safe_str(address)}")
+        if mobile:
+            lines.append(f"📞 Mobile: {safe_str(mobile)}")
         lines.append("")
-        # Insurance & Tax
-        lines.append("🛡 Insurance & Tax")
+
+    # === VEHICLE DETAILS ===
+    reg_no = vd.get("regNo") or vd.get("reg_no") or plate
+    model = vd.get("vehicle") or vd.get("model")
+    manufacturer = vd.get("manufacturer") or vd.get("maker")
+    variant = vd.get("variant")
+    fuel_type = vd.get("fuelType") or vd.get("fuel_type")
+    vehicle_class = vd.get("vehicleClass") or vd.get("class")
+    reg_date = vd.get("regDate") or vd.get("reg_date")
+    reg_authority = vd.get("regAuthority") or vd.get("registeredAt")
+    rto_code = vd.get("rtoCode") or vd.get("rto_code")
+    mfg_year = vd.get("manufacturerYear") or vd.get("mfg_year")
+    mfg_month = vd.get("manufacturerMonthYear")
+    color = vd.get("color")
+    seat_capacity = vd.get("seatCapacity")
+    vehicle_type = vd.get("vehicleType")
+    is_commercial = vd.get("isCommercial")
+    insurance_expired = vd.get("insuranceExpired")
+
+    lines.append('🚗 VEHICLE DETAILS ”')
+    lines.append("-" * 40)
+    lines.append(f"🔢 Vehicle No: {safe_str(reg_no)}")
+    has_any_data = True
+
+    # RC Status
+    if insurance_expired is not None:
+        rc_status = "INACTIVE" if insurance_expired else "ACTIVE"
+        status_icon = "🔴" if insurance_expired else "🟢"
+        lines.append(f"{status_icon} RC Status: {rc_status}")
+
+    # Model
+    model_str = safe_str(model)
+    if variant:
+        model_str += f" ({safe_str(variant)})"
+    if manufacturer:
+        model_str = f"{safe_str(manufacturer)} {model_str}"
+    lines.append(f"🚗 Model: {model_str}")
+
+    if reg_date:
+        lines.append(f"📅 Reg Date: {safe_str(reg_date)}")
+    if reg_authority:
+        lines.append(f"🏛 Registered At: {safe_str(reg_authority)}")
+    elif rto_code:
+        lines.append(f"🏛 RTO: {safe_str(rto_code)}")
+    if fuel_type:
+        lines.append(f"⛽ Fuel Type: {safe_str(fuel_type)}")
+    if mfg_year:
+        mfg_str = safe_str(mfg_year)
+        if mfg_month:
+            mfg_str = f"{safe_str(mfg_month)}"
+        lines.append(f"📅 Mfg Date: {mfg_str}")
+    if color:
+        lines.append(f"🎨 Color: {safe_str(color)}")
+    if vehicle_class:
+        lines.append(f"🚗 Class: {safe_str(vehicle_class)}")
+    if vehicle_type:
+        lines.append(f"🏷 Type: {safe_str(vehicle_type)}")
+    if is_commercial is not None:
+        comm = "Commercial" if is_commercial else "Private"
+        lines.append(f"📋 Category: {comm}")
+    lines.append("")
+
+    # === INSURANCE & FINANCE ===
+    ins_co = vd.get("insuranceCompanyName") or vd.get("insurer")
+    ins_policy = vd.get("insurancePolicyNumber") or vd.get("policy")
+    ins_upto = vd.get("insuranceUpto") or vd.get("valid_upto")
+    financer = vd.get("financerName") or vd.get("financier")
+
+    if ins_co or ins_policy or ins_upto or financer:
+        has_any_data = True
+        lines.append('🛡 INSURANCE & FINANCE ”')
         lines.append("-" * 40)
-        insurance_fields = [
-            ("🛡", "insuranceCompanyName", "Insurance"),
-            ("📅", "insuranceUpto", "Valid Upto"),
-            ("📋", "insurancePolicyNumber", "Policy No"),
-            ("📅", "fitnessUpto", "Fitness Upto"),
-            ("📅", "mvTaxUpto", "Tax Upto"),
-        ]
-        for emoji, key, label in insurance_fields:
-            v = vehicle_data.get(key)
-            if v:
-                lines.append(f"{emoji} {label}: {safe_str(v)}")
-
+        if ins_co:
+            lines.append(f"🛡 Insurance Co: {safe_str(ins_co)}")
+        if ins_policy:
+            lines.append(f"📋 Policy No: {safe_str(ins_policy)}")
+        if ins_upto:
+            lines.append(f"📅 Insurance Valid: {safe_str(ins_upto)}")
+        if financer:
+            lines.append(f"💰 Financer: {safe_str(financer)}")
         lines.append("")
-        # Technical details
-        chassis = vehicle_data.get("chassisNumber") or vehicle_data.get("chassis")
-        engine = vehicle_data.get("engineNumber") or vehicle_data.get("engine")
-        if chassis or engine:
-            lines.append("🔧 Technical")
-            lines.append("-" * 40)
-            if engine:
-                lines.append(f"🔧 Engine: {safe_str(engine)}")
-            if chassis:
-                lines.append(f"🧰 Chassis: {safe_str(chassis)}")
-            lines.append("")
 
-    else:
-        # Nested format fallback
-        owner = vehicle_data.get("owner", {})
-        vehicle = vehicle_data.get("vehicle", {})
-        insurance = vehicle_data.get("insurance", {})
-        technical = vehicle_data.get("technical", {})
+    # === VALIDITY & TAX ===
+    pucc_no = vd.get("puccNumber") or vd.get("pucc_no")
+    pucc_upto = vd.get("puccValidUpto") or vd.get("pucc_upto")
+    fitness_upto = vd.get("fitnessUpto") or vd.get("fitness_upto")
+    tax_upto = vd.get("mvTaxUpto") or vd.get("tax_upto")
 
-        # Try fallback key mapping
-        if not owner and not vehicle:
-            owner = {
-                "name": vehicle_data.get("owner"),
-                "mobile": vehicle_data.get("mobileNumber"),
-            }
-            vehicle = {
-                "reg_no": vehicle_data.get("regNo"),
-                "manufacturer": vehicle_data.get("manufacturer"),
-                "model": vehicle_data.get("vehicle"),
-                "fuel_type": vehicle_data.get("fuelType"),
-                "class": vehicle_data.get("vehicleClass"),
-                "color": vehicle_data.get("color"),
-            }
-            insurance = {
-                "insurer": vehicle_data.get("insuranceCompanyName"),
-                "policy": vehicle_data.get("insurancePolicyNumber"),
-                "valid_upto": vehicle_data.get("insuranceUpto"),
-            }
-            technical = {
-                "chassis": vehicle_data.get("chassisNumber") or vehicle_data.get("chassis"),
-                "engine": vehicle_data.get("engineNumber") or vehicle_data.get("engine"),
-                "financier": vehicle_data.get("financerName"),
-            }
+    if pucc_no or pucc_upto or fitness_upto or tax_upto:
+        has_any_data = True
+        lines.append('📋 VALIDITY & TAX ”')
+        lines.append("-" * 40)
+        if pucc_no:
+            lines.append(f"📄 PUCC No: {safe_str(pucc_no)}")
+        if pucc_upto:
+            lines.append(f"📅 PUCC Upto: {safe_str(pucc_upto)}")
+        if fitness_upto:
+            lines.append(f"📅 Fitness Upto: {safe_str(fitness_upto)}")
+        if tax_upto:
+            lines.append(f"📅 Tax Upto: {safe_str(tax_upto)}")
+        lines.append("")
 
-        has_data = False
-        # Vehicle section
-        if isinstance(vehicle, dict) and any(v for v in vehicle.values() if v):
-            has_data = True
-            lines.append("🚗 Vehicle Details")
-            lines.append("-" * 40)
-            vmap = {"reg_no": ("🔢", "Reg No"), "manufacturer": ("🏭", "Maker"),
-                    "model": ("🚗", "Model"), "fuel_type": ("⛽", "Fuel"),
-                    "class": ("🎶", "Class"), "color": ("🎨", "Color"),
-                    "reg_date": ("📅", "Reg Date"), "rto_code": ("🏛", "RTO")}
-            for k, (emoji, label) in vmap.items():
-                v = vehicle.get(k)
-                if v:
-                    lines.append(f"{emoji} {label}: {safe_str(v)}")
-            lines.append("")
+    # === TECHNICAL DETAILS ===
+    chassis = vd.get("chassisNumber") or vd.get("chassis")
+    engine = vd.get("engineNumber") or vd.get("engine")
+    cc = vd.get("cubicCapacity") or vd.get("engine_cc")
+    seats = vd.get("seatCapacity") or seat_capacity
 
-        # Owner section
-        if isinstance(owner, dict) and any(v for v in owner.values() if v):
-            has_data = True
-            omap = {"name": ("👤", "Owner"), "father_name": ("👨", "Father"),
-                    "mobile": ("📞", "Mobile"), "address": ("📍", "Address"),
-                    "perm_address": ("📍", "Perm Address")}
-            for k, (emoji, label) in omap.items():
-                v = owner.get(k)
-                if v:
-                    lines.append(f"{emoji} {label}: {safe_str(v)}")
-            lines.append("")
+    if chassis or engine or cc or seats:
+        has_any_data = True
+        lines.append('⚙️ TECHNICAL DETAILS ”')
+        lines.append("-" * 40)
+        if chassis:
+            lines.append(f"⚙️ Chassis No: {safe_str(chassis)}")
+        if engine:
+            lines.append(f"⚙️ Engine No: {safe_str(engine)}")
+        if vehicle_class:
+            lines.append(f"🚗 Category: {safe_str(vehicle_class)}")
+        if cc:
+            lines.append(f"⚙️ Engine CC: {safe_str(cc)} cc")
+        if seats:
+            lines.append(f"💺 Seating: {safe_str(seats)} Seats")
+        lines.append("")
 
-        # Insurance section
-        if isinstance(insurance, dict) and any(v for v in insurance.values() if v):
-            has_data = True
-            lines.append("🛡 Insurance")
-            lines.append("-" * 40)
-            imap = {"insurer": ("🏦", "Insurer"), "policy": ("📋", "Policy"),
-                    "valid_upto": ("📅", "Valid Upto")}
-            for k, (emoji, label) in imap.items():
-                v = insurance.get(k)
-                if v:
-                    lines.append(f"{emoji} {label}: {safe_str(v)}")
-            lines.append("")
+    if not has_any_data:
+        # Fallback: dump all raw data
+        lines.append("📊 Raw Data")
+        lines.append("-" * 40)
+        for key, value in vd.items():
+            if key == "data":
+                continue
+            if isinstance(value, dict):
+                continue
+            elif isinstance(value, list):
+                if value:
+                    lines.append(f"  {key.replace('_', ' ').title()}: ({len(value)} items)")
+            else:
+                lines.append(f"  {key.replace('_', ' ').title()}: {safe_str(value)}")
+        lines.append("")
 
-        # Technical section
-        if isinstance(technical, dict) and any(v for v in technical.values() if v):
-            has_data = True
-            lines.append("🔧 Technical")
-            lines.append("-" * 40)
-            tmap = {"engine": ("🔧", "Engine"), "chassis": ("🧰", "Chassis"),
-                    "financier": ("🏦", "Financer"), "mv_tax_upto": ("📅", "Tax Upto"),
-                    "fitness_upto": ("📅", "Fitness Upto")}
-            for k, (emoji, label) in tmap.items():
-                v = technical.get(k)
-                if v:
-                    lines.append(f"{emoji} {label}: {safe_str(v)}")
-            lines.append("")
-
-        if not has_data:
-            lines.append("No vehicle data found.")
-            lines.append("")
-
-    # Fallback: dump all raw data
-    if not any(vehicle_data.get(k) for k in ["regNo", "owner", "manufacturer", "vehicle"]):
-        # Check if any data was actually printed above
-        if not any(k in vehicle_data for k in ["regNo", "owner", "manufacturer", "vehicle"]):
-            lines.append("📊 Raw Data")
-            lines.append("-" * 40)
-            for key, value in vehicle_data.items():
-                if isinstance(value, dict) and key != "data":
-                    lines.append(f"  {key.replace('_', ' ').title()}:")
-                    for k2, v2 in value.items():
-                        if v2:
-                            lines.append(f"    {k2.replace('_', ' ').title()}: {safe_str(v2)}")
-                elif isinstance(value, list):
-                    if value:
-                        lines.append(f"  {key.replace('_', ' ').title()}: ({len(value)} items)")
-                else:
-                    lines.append(f"  {key.replace('_', ' ').title()}: {safe_str(value)}")
-            lines.append("")
-
-    lines.append("⚡ Powered by Hathi OSINT")
+    lines.append("⚡ Owner: @HATHI02 | Developer: @shadowxdeveloper")
     return "\n".join(lines)
 
 
@@ -964,7 +973,7 @@ def generate_numleak_pdf(data: dict) -> io.BytesIO:
     pdf.divider()
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(*TEXT_DIM)
-    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+    pdf.cell(0, 4, f"  Owner: @HATHI02 | Developer: @shadowxdeveloper", ln=True)
 
     buffer = io.BytesIO()
     buffer.write(pdf.output())
@@ -1083,7 +1092,7 @@ def generate_upi_pdf(data: dict) -> io.BytesIO:
     pdf.divider()
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(*TEXT_DIM)
-    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+    pdf.cell(0, 4, f"  Owner: @HATHI02 | Developer: @shadowxdeveloper", ln=True)
 
     buffer = io.BytesIO()
     buffer.write(pdf.output())
@@ -1248,7 +1257,7 @@ def generate_vehicle_pdf(data: dict) -> io.BytesIO:
     pdf.divider()
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(*TEXT_DIM)
-    pdf.cell(0, 4, f"  Powered by @HATHI02", ln=True)
+    pdf.cell(0, 4, f"  Owner: @HATHI02 | Developer: @shadowxdeveloper", ln=True)
 
     buffer = io.BytesIO()
     buffer.write(pdf.output())

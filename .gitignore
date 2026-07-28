@@ -7,6 +7,9 @@
 *.db-journal
 *.db-wal
 
+# User data store
+user_data.json
+
 # Python
 __pycache__/
 *.pyc

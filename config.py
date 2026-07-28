@@ -28,9 +28,9 @@ UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
 # Subscription Packages (unlimited searches for duration)
 SUBSCRIPTION_PACKAGES = {
-    "daily": {"duration_hours": 24, "price": 10, "label": "1 Day Pack"},
-    "weekly": {"duration_hours": 168, "price": 100, "label": "1 Week Pack"},
-    "monthly": {"duration_hours": 720, "price": 200, "label": "1 Month Pack"},
+    "daily": {"duration_hours": 24, "price": 20, "label": "1 Day Pack"},
+    "weekly": {"duration_hours": 168, "price": 200, "label": "1 Week Pack"},
+    "monthly": {"duration_hours": 720, "price": 400, "label": "1 Month Pack"},
 }
 
 # Free trial hours for new users (24 hours of free unlimited searches)

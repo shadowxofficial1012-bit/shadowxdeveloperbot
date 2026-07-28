@@ -12,6 +12,7 @@ from telegram.error import BadRequest
 
 import database as db
 import api_client
+import user_data_store as uds
 from keyboards import (
     main_menu_keyboard,
     buy_plan_keyboard,
@@ -25,7 +26,7 @@ from keyboards import (
     main_menu_button,
 )
 from datetime import datetime
-from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, QR_CODE_PATH, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS, REQUIRED_CHANNELS
+from config import SUBSCRIPTION_PACKAGES, UPI_ID, UPI_NAME, FREE_TRIAL_HOURS, LOGO_PATH, BRAND_NAME, BRAND_TAGLINE, ADMIN_IDS, REQUIRED_CHANNELS
 
 
 def generate_upi_qr(amount: int, note: str = "") -> io.BytesIO:
@@ -435,18 +436,27 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔐 <b>Unlimited lookups</b> for the duration!\n"
         "Send payment, then upload screenshot to confirm."
     )
-    # Send QR code image if available
-    if os.path.exists(QR_CODE_PATH):
-        try:
-            await update.message.reply_photo(
-                photo=QR_CODE_PATH,
-                caption=text,
-                reply_markup=buy_plan_keyboard(),
-                parse_mode="HTML",
-            )
-            return
-        except Exception as e:
-            logger.error(f"Failed to send QR code: {e}")
+    # Generate and send QR code image with UPI details (no amount yet — user selects package first)
+    try:
+        import qrcode
+        upi_link = (
+            f"upi://pay?pa={UPI_ID}"
+            f"&pn={quote(UPI_NAME)}"
+            f"&cu=INR"
+        )
+        qr = qrcode.make(upi_link)
+        buf = io.BytesIO()
+        qr.save(buf, format="PNG")
+        buf.seek(0)
+        await update.message.reply_photo(
+            photo=buf,
+            caption=text,
+            reply_markup=buy_plan_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+    except Exception as e:
+        logger.error(f"Failed to generate QR code: {e}")
     # Fallback: text only
     await update.message.reply_text(text, reply_markup=buy_plan_keyboard(), parse_mode="HTML")
 
@@ -456,6 +466,12 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _approve_transaction(tx_id: int, context, query=None):
     """Approve a transaction: update status, activate subscription, notify user."""
     db.update_transaction_status(tx_id, "approved")
+
+    # Update payment status in unified JSON store
+    try:
+        uds.update_payment_status(tx_id, "approved")
+    except Exception as e:
+        logger.warning(f"JSON store update_payment_status failed: {e}")
 
     conn = db.get_db()
     c = conn.cursor()
@@ -468,6 +484,11 @@ async def _approve_transaction(tx_id: int, context, query=None):
         if tx["package"] in SUBSCRIPTION_PACKAGES:
             hours = SUBSCRIPTION_PACKAGES[tx["package"]]["duration_hours"]
             expiry = db.set_subscription(tx["user_id"], hours)
+            # Save subscription to unified JSON store
+            try:
+                uds.save_subscription(tx["user_id"], tx["package"], tx["amount"], expiry)
+            except Exception as e:
+                logger.warning(f"JSON store save_subscription failed: {e}")
             try:
                 await context.bot.send_message(
                     tx["user_id"],
@@ -492,6 +513,12 @@ async def _approve_transaction(tx_id: int, context, query=None):
 async def _reject_transaction(tx_id: int, context, query=None):
     """Reject a transaction: update status, notify user."""
     db.update_transaction_status(tx_id, "rejected")
+
+    # Update payment status in unified JSON store
+    try:
+        uds.update_payment_status(tx_id, "rejected")
+    except Exception as e:
+        logger.warning(f"JSON store update_payment_status failed: {e}")
 
     conn = db.get_db()
     c = conn.cursor()
@@ -519,6 +546,387 @@ async def _reject_transaction(tx_id: int, context, query=None):
         except BadRequest:
             await query.message.reply_text(result, parse_mode="HTML")
     return result
+
+
+USERS_PAGE_SIZE = 10
+
+
+async def _send_userdata_page(update_or_query, context, page_num: int):
+    """Send a paginated user list page with navigation buttons."""
+    all_users = uds.get_all_users()
+    total = len(all_users)
+    total_pages = max(1, (total + USERS_PAGE_SIZE - 1) // USERS_PAGE_SIZE)
+    page_num = max(0, min(page_num, total_pages - 1))
+
+    start_idx = page_num * USERS_PAGE_SIZE
+    page_users = all_users[start_idx:start_idx + USERS_PAGE_SIZE]
+
+    lines = []
+    lines.append(f"👥 <b>Users (Page {page_num + 1}/{total_pages})</b>")
+    lines.append(f"📊 Total: {total} users")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    for u in page_users:
+        sub = u.get('subscription', {})
+        sub_status = "✅" if sub.get('status') == 'active' else "⚠️"
+        sub_pkg = sub.get('package', 'None') or 'None'
+        lines.append(
+            f"{sub_status} <b>{u.get('first_name', 'N/A')}</b> "
+            f"(@{u.get('username', 'N/A')}) "
+            f"ID: <code>{u.get('user_id')}</code>"
+        )
+        lines.append(
+            f"   📊 {u.get('total_lookups', 0)} lookups | "
+            f"💰 ₹{u.get('total_spent', 0)} spent | "
+            f"📋 {sub_pkg}"
+        )
+    lines.append("")
+    lines.append(f"Page {page_num + 1} of {total_pages}")
+
+    text = "\n".join(lines)
+
+    # Build pagination keyboard
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    buttons = []
+    nav_row = []
+    if page_num > 0:
+        nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"udpage_{page_num - 1}"))
+    nav_row.append(InlineKeyboardButton(f"{page_num + 1}/{total_pages}", callback_data="noop"))
+    if page_num < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"udpage_{page_num + 1}"))
+    buttons.append(nav_row)
+    buttons.append([InlineKeyboardButton("🏠 Main Menu", callback_data="back_main")])
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Edit or send
+    if hasattr(update_or_query, 'edit_message_text'):
+        try:
+            await update_or_query.edit_message_text(text, parse_mode="HTML", reply_markup=keyboard)
+        except BadRequest:
+            await update_or_query.message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+    else:
+        await update_or_query.message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+async def _send_single_user_data(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Display full data for a single user."""
+    user_data = uds.get_user_full_data(user_id)
+    if not user_data:
+        await update.message.reply_text(
+            f"❌ User <code>{user_id}</code> not found in database.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = []
+    lines.append(f"👤 <b>User Profile — {user_id}</b>")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("")
+
+    # Profile section
+    lines.append("<b>📋 Profile</b>")
+    lines.append(f"   👤 Name: <b>{user_data.get('first_name', 'N/A')}</b>")
+    lines.append(f"   📛 Username: @{user_data.get('username', 'N/A')}")
+    lines.append(f"   🆔 User ID: <code>{user_data.get('user_id')}</code>")
+    lines.append(f"   📅 First Seen: {user_data.get('first_seen', 'N/A')[:16]}")
+    lines.append(f"   🕐 Last Active: {user_data.get('last_active', 'N/A')[:16]}")
+    lines.append(f"   🚫 Banned: {'Yes' if user_data.get('is_banned') else 'No'}")
+    lines.append("")
+
+    # Subscription section
+    sub = user_data.get('subscription', {})
+    lines.append("<b>💰 Subscription</b>")
+    sub_status = sub.get('status', 'inactive')
+    if sub_status == 'active':
+        lines.append(f"   ✅ Status: <b>Active</b>")
+        lines.append(f"   📦 Package: {sub.get('package', 'N/A')}")
+        lines.append(f"   📅 Expiry: {sub.get('expiry', 'N/A')}")
+        lines.append(f"   🕐 Activated: {sub.get('activated_at', 'N/A')[:16]}")
+        # Check if expired
+        try:
+            exp_dt = datetime.fromisoformat(sub.get('expiry', ''))
+            if exp_dt < datetime.now():
+                lines.append(f"   ⚠️ <b>EXPIRED</b>")
+        except:
+            pass
+    else:
+        lines.append(f"   ⚠️ Status: <b>Inactive</b>")
+    lines.append("")
+
+    # Usage stats
+    lines.append("<b>📊 Usage Stats</b>")
+    lines.append(f"   🔍 Total Lookups: {user_data.get('total_lookups', 0)}")
+    lines.append(f"   💳 Total Spent: ₹{user_data.get('total_spent', 0)}")
+    lines.append(f"   💰 Total Paid: ₹{user_data.get('total_paid', 0)}")
+    lines.append("")
+
+    # Payments
+    payments = user_data.get('all_payments', [])
+    if payments:
+        lines.append("<b>💳 Payment History</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        for p in payments[-10:]:  # Last 10 payments
+            icon = "✅" if p.get('status') == 'approved' else "⏳" if p.get('status') == 'pending' else "❌"
+            lines.append(
+                f"   {icon} <b>{p.get('package', 'N/A').title()}</b> — "
+                f"₹{p.get('amount', 0)} | {p.get('status', 'N/A')}"
+            )
+            lines.append(f"      📅 {p.get('timestamp', 'N/A')[:16]}")
+        if len(payments) > 10:
+            lines.append(f"   ... and {len(payments) - 10} more payments")
+        lines.append("")
+
+    # Lookups
+    lookups = user_data.get('all_lookups', [])
+    if lookups:
+        lines.append("<b>🔍 Lookup History</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        for l in lookups[-10:]:  # Last 10 lookups
+            icon = "✅" if l.get('success') else "❌"
+            lines.append(
+                f"   {icon} {l.get('lookup_type', 'N/A')} — "
+                f"<code>{l.get('query', 'N/A')}</code>"
+            )
+            lines.append(f"      📅 {l.get('timestamp', 'N/A')[:16]}")
+        if len(lookups) > 10:
+            lines.append(f"   ... and {len(lookups) - 10} more lookups")
+        lines.append("")
+
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("📊 <b>Owner: @HATHI02 | Developer: @shadowxdeveloper</b>")
+
+    text = "\n".join(lines)
+
+    # Split if too long
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back to Users", callback_data="udpage_0")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="back_main")]
+    ])
+
+    if len(text) + 50 > MAX_MSG_LEN:
+        part1 = text[:3800]
+        part2 = text[3800:]
+        await update.message.reply_text(part1, parse_mode="HTML")
+        await update.message.reply_text(part2, parse_mode="HTML", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+async def handle_userdata_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /userdata command - show stats and export user_data.json.
+    
+    Usage:
+      /userdata         - Show all users with pagination
+      /userdata <id>    - Show single user's full data
+    """
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("🚫 <b>Access Denied.</b>", parse_mode="HTML")
+        return
+
+    # Check if a user_id was provided
+    if context.args and len(context.args) > 0:
+        try:
+            target_user_id = int(context.args[0])
+            await _send_single_user_data(update, context, target_user_id)
+            return
+        except ValueError:
+            await update.message.reply_text(
+                "❌ <b>Invalid User ID!</b>\n\n"
+                "Usage: <code>/userdata</code> or <code>/userdata &lt;user_id&gt;</code>\n"
+                "Example: <code>/userdata 123456789</code>",
+                parse_mode="HTML",
+            )
+            return
+
+    loading_msg = await update.message.reply_text(
+        "📊 <b>Loading user data...</b>",
+        parse_mode="HTML",
+    )
+
+    try:
+        stats = uds.get_stats()
+        all_users = uds.get_all_users()
+        all_payments = uds.get_all_payments(limit=50)
+
+        # Build stats message
+        lines = []
+        lines.append("📊 <b>User Data Report</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+        lines.append(f"👥 <b>Total Users:</b> {stats.get('total_users', 0)}")
+        lines.append(f"🔍 <b>Total Lookups:</b> {stats.get('total_lookups', 0)}")
+        lines.append(f"💳 <b>Total Payments:</b> {stats.get('total_payments', 0)}")
+        lines.append(f"✅ <b>Approved:</b> {stats.get('approved_payments', 0)}")
+        lines.append(f"⏳ <b>Pending:</b> {stats.get('pending_payments', 0)}")
+        lines.append(f"💰 <b>Total Revenue:</b> ₹{stats.get('total_revenue', 0)}")
+        lines.append("")
+
+        # Lookup type breakdown
+        lookup_types = stats.get('lookup_types', {})
+        if lookup_types:
+            lines.append("🔍 <b>Lookup Breakdown:</b>")
+            for lt, count in lookup_types.items():
+                lines.append(f"   • {lt}: {count}")
+            lines.append("")
+
+        # Active subscriptions
+        lines.append(f"✅ <b>Active Subscriptions:</b> {stats.get('active_subscriptions', 0)}")
+        lines.append("")
+
+        # User list with pagination
+        PAGE_SIZE = 10
+        total_users_count = len(all_users)
+        total_pages = max(1, (total_users_count + PAGE_SIZE - 1) // PAGE_SIZE)
+        current_page = 0
+        page_users = all_users[current_page * PAGE_SIZE:(current_page + 1) * PAGE_SIZE]
+
+        lines.append(f"👥 <b>Users (Page {current_page + 1}/{total_pages}):</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        for u in page_users:
+            sub = u.get('subscription', {})
+            sub_status = "✅" if sub.get('status') == 'active' else "⚠️"
+            sub_pkg = sub.get('package', 'None') or 'None'
+            lines.append(
+                f"{sub_status} <b>{u.get('first_name', 'N/A')}</b> "
+                f"(@{u.get('username', 'N/A')}) "
+                f"ID: <code>{u.get('user_id')}</code>"
+            )
+            lines.append(
+                f"   📊 {u.get('total_lookups', 0)} lookups | "
+                f"💰 ₹{u.get('total_spent', 0)} spent | "
+                f"📋 {sub_pkg}"
+            )
+        lines.append("")
+
+        # Recent payments
+        if all_payments:
+            lines.append("💳 <b>Recent Payments:</b>")
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            for p in all_payments[:10]:
+                icon = "✅" if p.get('status') == 'approved' else "⏳" if p.get('status') == 'pending' else "❌"
+                lines.append(
+                    f"{icon} <b>{p.get('package', 'N/A').title()}</b> — "
+                    f"₹{p.get('amount', 0)} | "
+                    f"{p.get('username', 'N/A')} | "
+                    f"{p.get('timestamp', 'N/A')[:16]}"
+                )
+            lines.append("")
+
+        text = "\n".join(lines)
+
+        # Send stats text (split if too long)
+        if len(text) + 50 > MAX_MSG_LEN:
+            part1 = text[:3800]
+            part2 = text[3800:]
+            await loading_msg.edit_text(part1, parse_mode="HTML")
+            if part2:
+                await update.message.reply_text(part2, parse_mode="HTML")
+        else:
+            await loading_msg.edit_text(text, parse_mode="HTML")
+
+        # Send the JSON file as attachment
+        try:
+            import user_data_store as _uds_file
+            json_path = _uds_file.USER_DATA_FILE
+            if os.path.exists(json_path):
+                with open(json_path, 'rb') as f:
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=f,
+                        filename="user_data.json",
+                        caption="📄 <b>Full user_data.json export</b>",
+                        parse_mode="HTML",
+                    )
+            else:
+                await update.message.reply_text(
+                    "⚠️ user_data.json not found yet. Data will appear after first user interaction.",
+                    parse_mode="HTML",
+                )
+        except Exception as e:
+            logger.error(f"Failed to send user_data.json: {e}")
+            await update.message.reply_text(
+                f"⚠️ Could not send file: {str(e)[:100]}",
+                parse_mode="HTML",
+            )
+
+        # Generate and send CSV files for spreadsheet analysis
+        try:
+            import csv as csv_mod
+
+            # --- Users CSV ---
+            users_buf = io.BytesIO()
+            users_writer = csv_mod.writer(users_buf)
+            users_writer.writerow([
+                "User ID", "Username", "First Name", "First Seen", "Last Active",
+                "Total Lookups", "Total Spent", "Sub Status", "Sub Package",
+                "Sub Expiry", "Is Banned"
+            ])
+            for u in all_users:
+                sub = u.get('subscription', {})
+                users_writer.writerow([
+                    u.get('user_id', ''),
+                    u.get('username', ''),
+                    u.get('first_name', ''),
+                    u.get('first_seen', ''),
+                    u.get('last_active', ''),
+                    u.get('total_lookups', 0),
+                    u.get('total_spent', 0),
+                    sub.get('status', 'inactive'),
+                    sub.get('package', ''),
+                    sub.get('expiry', ''),
+                    u.get('is_banned', False),
+                ])
+            users_buf.seek(0)
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=users_buf,
+                filename="users_export.csv",
+                caption="📊 <b>Users CSV</b> — Open in Excel/Sheets",
+                parse_mode="HTML",
+            )
+
+            # --- Payments CSV ---
+            all_payments_full = uds.get_all_payments(limit=500)
+            if all_payments_full:
+                pays_buf = io.BytesIO()
+                pays_writer = csv_mod.writer(pays_buf)
+                pays_writer.writerow([
+                    "Payment ID", "User ID", "Username", "Package", "Amount",
+                    "Status", "Timestamp", "TX ID"
+                ])
+                for p in all_payments_full:
+                    pays_writer.writerow([
+                        p.get('id', ''),
+                        p.get('user_id', ''),
+                        p.get('username', ''),
+                        p.get('package', ''),
+                        p.get('amount', 0),
+                        p.get('status', ''),
+                        p.get('timestamp', ''),
+                        p.get('tx_id', ''),
+                    ])
+                pays_buf.seek(0)
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=pays_buf,
+                    filename="payments_export.csv",
+                    caption="💳 <b>Payments CSV</b> — Open in Excel/Sheets",
+                    parse_mode="HTML",
+                )
+
+        except Exception as e:
+            logger.error(f"CSV export failed: {e}")
+            await update.message.reply_text(
+                f"⚠️ CSV export failed: {str(e)[:100]}",
+                parse_mode="HTML",
+            )
+
+    except Exception as e:
+        logger.error(f"userdata command failed: {e}")
+        await loading_msg.edit_text(
+            f"❌ <b>Error loading data:</b> {str(e)[:200]}",
+            parse_mode="HTML",
+        )
 
 
 async def handle_approve_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -776,6 +1184,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         tx_id = int(data.replace("reject_", ""))
         await _reject_transaction(tx_id, context, query)
+        return
+
+    # Admin: User data page navigation
+    if data.startswith("udpage_"):
+        if user.id not in ADMIN_IDS:
+            return
+        page_num = int(data.replace("udpage_", ""))
+        await _send_userdata_page(update, context, page_num)
         return
 
     # Admin: Confirm ban
@@ -1218,6 +1634,12 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "lookup_type": "numleak",
     }
 
+    # Save user data to JSON store for persistence across restarts
+    try:
+        uds.save_user(user.id, user.username, user.first_name)
+        uds.save_lookup(user.id, user.username or user.first_name, "numleak", phone_number, combined_data, True)
+    except Exception as e:
+        logger.warning(f"User data store save failed: {e}")
 
     try:
         await loading_msg.delete()
@@ -1427,6 +1849,13 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.log_lookup(user.id, phone_number, True)
     db.save_lookup_result(user.id, phone_number, json.dumps(combined_data))
 
+    # Save user data to JSON store for persistence across restarts
+    try:
+        uds.save_user(user.id, user.username, user.first_name)
+        uds.save_lookup(user.id, user.username or user.first_name, "numtoupi", phone_number, combined_data, True)
+    except Exception as e:
+        logger.warning(f"User data store save failed: {e}")
+
     try:
         await loading_msg.delete()
     except Exception:
@@ -1627,6 +2056,13 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
     db.log_lookup(user.id, vehicle_plate, True)
     db.save_lookup_result(user.id, vehicle_plate, json.dumps(combined_data))
 
+    # Save user data to JSON store for persistence across restarts
+    try:
+        uds.save_user(user.id, user.username, user.first_name)
+        uds.save_lookup(user.id, user.username or user.first_name, "vehicle", vehicle_plate, combined_data, True)
+    except Exception as e:
+        logger.warning(f"User data store save failed: {e}")
+
     try:
         await loading_msg.delete()
     except Exception:
@@ -1731,6 +2167,12 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tx_id = db.create_transaction(user.id, awaiting, pkg["duration_hours"], pkg["price"], screenshot_file_id)
+
+    # Save payment to unified JSON store
+    try:
+        uds.save_payment(user.id, user.username or user.first_name, awaiting, pkg["price"], "pending", tx_id)
+    except Exception as e:
+        logger.warning(f"JSON store save_payment failed: {e}")
 
     context.user_data.pop("awaiting_screenshot", None)
     context.user_data.pop("pending_package", None)

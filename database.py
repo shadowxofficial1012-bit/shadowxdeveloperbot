@@ -2,9 +2,12 @@ import os
 import sqlite3
 import secrets
 import string
+import logging
 from datetime import datetime
 from datetime import datetime, timedelta
-from config import DB_PATH, FREE_TRIAL_HOURS
+from config import DB_PATH, FREE_TRIAL_HOURS, SUBSCRIPTION_PACKAGES
+
+logger = logging.getLogger(__name__)
 
 
 def get_db():
@@ -15,6 +18,99 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def sync_from_json():
+    """Restore subscriptions and user data from user_data.json into SQLite.
+    Called on startup to ensure data survives redeployments.
+    """
+    try:
+        import user_data_store as uds
+        data = uds._load_data()
+        users = data.get("users", {})
+        if not users:
+            return
+
+        synced = 0
+        conn = get_db()
+        c = conn.cursor()
+
+        for user_key, user_data in users.items():
+            user_id = user_data.get("user_id")
+            if not user_id:
+                continue
+
+            # Check if user exists in SQLite
+            c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+            existing = c.fetchone()
+
+            sub = user_data.get("subscription", {})
+            sub_expiry = sub.get("expiry") if sub else None
+            sub_status = sub.get("status") if sub else None
+
+            if existing:
+                # User exists in SQLite — update subscription if JSON has a later expiry
+                current_expiry = existing["subscription_expiry"]
+                if sub_expiry and sub_status == "active":
+                    if not current_expiry:
+                        # No expiry in SQLite, restore from JSON
+                        c.execute("UPDATE users SET subscription_expiry = ? WHERE user_id = ?",
+                                  (sub_expiry, user_id))
+                        synced += 1
+                    else:
+                        # Both have expiry — keep the later one
+                        try:
+                            json_dt = datetime.fromisoformat(sub_expiry)
+                            db_dt = datetime.fromisoformat(current_expiry)
+                            if json_dt > db_dt:
+                                c.execute("UPDATE users SET subscription_expiry = ? WHERE user_id = ?",
+                                          (sub_expiry, user_id))
+                                synced += 1
+                        except (ValueError, TypeError):
+                            pass
+            else:
+                # User doesn't exist in SQLite — create from JSON
+                username = user_data.get("username")
+                first_name = user_data.get("first_name")
+                total_lookups = user_data.get("total_lookups", 0)
+                c.execute(
+                    "INSERT INTO users (user_id, username, first_name, total_lookups, subscription_expiry) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, username, first_name, total_lookups, sub_expiry or ""),
+                )
+                synced += 1
+
+        # Also sync ban status from JSON → SQLite
+            if user_data.get("is_banned") and not (existing and existing["is_banned"]):
+                c.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+                synced += 1
+
+        # Also restore transactions from JSON
+        payments = data.get("payments", [])
+        for payment in payments:
+            if payment.get("status") == "approved":
+                tx_id_db = payment.get("tx_id")
+                if tx_id_db:
+                    # Check if transaction already exists in SQLite
+                    c.execute("SELECT id FROM transactions WHERE id = ?", (tx_id_db,))
+                    if not c.fetchone():
+                        c.execute(
+                            "INSERT INTO transactions (id, user_id, package, duration_hours, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (tx_id_db, payment.get("user_id"), payment.get("package"),
+                             SUBSCRIPTION_PACKAGES.get(payment.get("package", ""), {}).get("duration_hours", 24),
+                             payment.get("amount", 0), "approved",
+                             payment.get("timestamp", datetime.now().isoformat())),
+                        )
+                        synced += 1
+
+        conn.commit()
+        conn.close()
+        if synced > 0:
+            logger.info(f"Synced {synced} records from user_data.json to database")
+        else:
+            logger.debug("No new data to sync from user_data.json")
+
+    except Exception as e:
+        logger.warning(f"Sync from JSON failed: {e}")
 
 
 def init_db():
@@ -470,3 +566,98 @@ def get_redeem_code_stats():
     
     conn.close()
     return {"total": total, "used": used, "unused": unused}
+
+
+# ==================== BIDIRECTIONAL SYNC ====================
+
+_last_sync_time = None
+
+def sync_to_json():
+    """Sync data FROM SQLite TO user_data.json.
+    Updates lookup counts, ban status, and subscription expiry in JSON.
+    """
+    try:
+        import user_data_store as uds
+
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT user_id, username, first_name, total_lookups, is_banned, subscription_expiry FROM users")
+        sqlite_users = {row["user_id"]: dict(row) for row in c.fetchall()}
+        conn.close()
+
+        data = uds._load_data()
+        users = data.get("users", {})
+        updated = 0
+
+        for user_key, user_data in users.items():
+            user_id = user_data.get("user_id")
+            if not user_id or user_id not in sqlite_users:
+                continue
+
+            sq = sqlite_users[user_id]
+
+            # Sync lookup count (use higher of the two)
+            json_lookups = user_data.get("total_lookups", 0)
+            sq_lookups = sq.get("total_lookups", 0)
+            if sq_lookups > json_lookups:
+                user_data["total_lookups"] = sq_lookups
+                updated += 1
+
+            # Sync ban status from SQLite → JSON
+            if sq.get("is_banned") and not user_data.get("is_banned"):
+                user_data["is_banned"] = True
+                updated += 1
+            elif not sq.get("is_banned") and user_data.get("is_banned"):
+                user_data["is_banned"] = False
+                updated += 1
+
+            # Sync subscription expiry (use the later one)
+            sq_expiry = sq.get("subscription_expiry")
+            sub = user_data.get("subscription", {})
+            json_expiry = sub.get("expiry") if sub else None
+
+            if sq_expiry:
+                if not json_expiry:
+                    # SQLite has expiry but JSON doesn't — restore it
+                    sub["expiry"] = sq_expiry
+                    if sub.get("status") != "active":
+                        sub["status"] = "active"
+                    updated += 1
+                else:
+                    # Both have expiry — keep the later one
+                    try:
+                        sq_dt = datetime.fromisoformat(sq_expiry)
+                        json_dt = datetime.fromisoformat(json_expiry)
+                        if sq_dt > json_dt:
+                            sub["expiry"] = sq_expiry
+                            updated += 1
+                    except (ValueError, TypeError):
+                        pass
+
+        if updated > 0:
+            uds._save_data(data)
+            logger.info(f"Synced {updated} fields from SQLite to user_data.json")
+        else:
+            logger.debug("SQLite → JSON: no changes needed")
+
+    except Exception as e:
+        logger.warning(f"Sync to JSON failed: {e}")
+
+
+def periodic_sync():
+    """Run bidirectional sync: JSON → SQLite then SQLite → JSON.
+    Called periodically by the JobQueue.
+    """
+    global _last_sync_time
+    try:
+        sync_from_json()
+        sync_to_json()
+        _last_sync_time = datetime.now().isoformat()
+        logger.info("Periodic SQLite ↔ JSON sync completed")
+    except Exception as e:
+        logger.warning(f"Periodic sync failed: {e}")
+
+
+def get_last_sync_time():
+    """Return the last successful sync timestamp."""
+    return _last_sync_time
