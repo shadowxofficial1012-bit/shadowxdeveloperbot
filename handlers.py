@@ -2018,13 +2018,15 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
 
     if not result_vehicle["success"]:
         err_vehicle = result_vehicle.get('error', 'Unknown')
-        # Show user-friendly message for common errors
-        if '404' in str(err_vehicle):
+        raw_err = str(result_vehicle.get('raw_error', ''))
+        # Show user-friendly message for common errors (check both error and raw_error)
+        combined_err = f"{err_vehicle} {raw_err}".lower()
+        if '404' in combined_err:
             friendly_msg = ("The vehicle registration number was not found in the database.\n"
                           "Please check the number and try again.")
-        elif 'timeout' in str(err_vehicle).lower():
+        elif 'timeout' in combined_err:
             friendly_msg = "The API server is taking too long. Please try again later."
-        elif 'blocked' in str(err_vehicle).lower() or '403' in str(err_vehicle):
+        elif 'blocked' in combined_err or '403' in combined_err:
             friendly_msg = "The API is temporarily blocked. Please try again later."
         else:
             friendly_msg = "Please try again later."
