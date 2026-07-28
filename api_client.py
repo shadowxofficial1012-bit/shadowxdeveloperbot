@@ -295,7 +295,7 @@ async def check_api_health() -> list[dict]:
     endpoints = [
         {"name": "Numleak (Phone Lookup)", "url": OSINT_API_NUMLEAK_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
         {"name": "UPI Lookup", "url": OSINT_API_NUMTOUPI_URL, "params": {"key": OSINT_API_KEY, "num": "9999999999"}, "timeout": 10},
-        {"name": "Vehicle", "url": OSINT_API_VEHICLE_URL, "params": {"vehicle": "MH00AA0000"}, "timeout": 15},
+        {"name": "Vehicle", "url": OSINT_API_VEHICLE_URL, "params": {"vehicle": "MH00AA0000", "key": OSINT_API_KEY}, "timeout": 15},
     ]
 
     if API_RELAY_URL:
