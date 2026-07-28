@@ -1364,7 +1364,7 @@ async def demo_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text_report = generate_numleak_text_report(demo_data)
     await update.message.reply_text(
-        f"<pre>{text_report}</pre>",
+        f"<pre>{escape_html(text_report)}</pre>",
         parse_mode="HTML",
     )
     
@@ -1422,7 +1422,7 @@ async def demo_upi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text_report = generate_upi_text_report(demo_data)
     await update.message.reply_text(
-        f"<pre>{text_report}</pre>",
+        f"<pre>{escape_html(text_report)}</pre>",
         parse_mode="HTML",
     )
     
@@ -1484,7 +1484,7 @@ async def demo_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text_report = generate_vehicle_text_report(demo_data)
     await update.message.reply_text(
-        f"<pre>{text_report}</pre>",
+        f"<pre>{escape_html(text_report)}</pre>",
         parse_mode="HTML",
     )
     
@@ -1647,13 +1647,15 @@ async def handle_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     from pdf_exporter import generate_text_report, generate_osint_pdf
+    import html as html_mod
     
     text_report = generate_text_report(combined_data)
-    code_block = f"<pre>{text_report}</pre>"
+    escaped_report = html_mod.escape(text_report)
+    code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = text_report[:3800]
-        part2 = text_report[3800:]
+        part1 = html_mod.escape(text_report[:3800])
+        part2 = html_mod.escape(text_report[3800:])
         await update.message.reply_text(
             f"<pre>{part1}</pre>",
             parse_mode="HTML",
@@ -1863,12 +1865,14 @@ async def handle_upi_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Generate text report
     from pdf_exporter import generate_upi_text_report
+    import html as html_mod
     text_report = generate_upi_text_report(combined_data)
-    code_block = f"<pre>{text_report}</pre>"
+    escaped_report = html_mod.escape(text_report)
+    code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = text_report[:3800]
-        part2 = text_report[3800:]
+        part1 = html_mod.escape(text_report[:3800])
+        part2 = html_mod.escape(text_report[3800:])
         await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
         if part2:
             await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
@@ -2070,12 +2074,14 @@ async def handle_vehicle_lookup(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Generate text report
     from pdf_exporter import generate_vehicle_text_report
+    import html as html_mod
     text_report = generate_vehicle_text_report(combined_data)
-    code_block = f"<pre>{text_report}</pre>"
+    escaped_report = html_mod.escape(text_report)
+    code_block = f"<pre>{escaped_report}</pre>"
     
     if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = text_report[:3800]
-        part2 = text_report[3800:]
+        part1 = html_mod.escape(text_report[:3800])
+        part2 = html_mod.escape(text_report[3800:])
         await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
         if part2:
             await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
