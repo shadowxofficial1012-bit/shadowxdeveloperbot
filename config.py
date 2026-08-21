@@ -6,18 +6,6 @@ load_dotenv()
 # Telegram Bot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8426678718:AAHmYodZH82VD2DOq60vFwXoJSwfG8eLt2I")
 
-# OSINT APIs
-# OSINT APIs - numleak is the primary phone lookup (contains both number info + leak data)
-OSINT_API_NUMLEAK_URL = os.getenv("OSINT_API_NUMLEAK_URL", "https://ft-osint-api.duckdns.org/api/numleak")
-OSINT_API_NUMTOUPI_URL = os.getenv("OSINT_API_NUMTOUPI_URL", "https://ft-osint-api.duckdns.org/api/numtoupi")
-OSINT_API_VEHICLE_URL = os.getenv("OSINT_API_VEHICLE_URL", "https://ft-osint-api.duckdns.org/api/vehicle")
-OSINT_API_KEY = os.getenv("OSINT_API_KEY", "lesbian-hathi2")
-
-# API relay proxy URL (bypasses Railway network restrictions)
-# If empty/unset, the bot calls APIs directly (with fallback).
-# Set this to your Cloudflare Worker URL if you need to bypass Railway's network blocks.
-API_RELAY_URL = os.getenv("API_RELAY_URL", "")
-
 # Admin IDs (comma-separated Telegram user IDs)
 _admin_str = os.getenv("ADMIN_IDS", "8722759285,7392346621")
 ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
@@ -26,29 +14,42 @@ ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
 UPI_ID = os.getenv("UPI_ID", "yourupi@paytm")
 UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
-# Subscription Packages (unlimited searches for duration)
+# Subscription Packages
 SUBSCRIPTION_PACKAGES = {
     "daily": {"duration_hours": 24, "price": 20, "label": "1 Day Pack"},
     "weekly": {"duration_hours": 168, "price": 200, "label": "1 Week Pack"},
     "monthly": {"duration_hours": 720, "price": 400, "label": "1 Month Pack"},
 }
 
-# Free trial hours for new users (24 hours of free unlimited searches)
+# Free trial hours for new users
 FREE_TRIAL_HOURS = 0
 
-# Required Channels/Groups - users must join before using the bot
+# Required Channels
 REQUIRED_CHANNELS = [
-    "@hathixshadow",  # https://t.me/hathixshadow
-    "@suh_gf4u",       # https://t.me/suh_gf4u
+    "@hathixshadow",
+    "@suh_gf4u",
 ]
 
-# Database - use relative path for Railway compatibility
+# Database
 DB_PATH = os.getenv("DB_PATH", "osint_bot.db")
 
 # Payment QR Code
 QR_CODE_PATH = os.getenv("QR_CODE_PATH", "media/qr_code.png")
 
-# Export Image Branding
-BRAND_NAME = os.getenv("BRAND_NAME", "HATHI02")
-BRAND_TAGLINE = os.getenv("BRAND_TAGLINE", "Phone Number OSINT Report")
+# Branding
+BRAND_NAME = "HathixShadow"
+BRAND_TAGLINE = "OSINT Bot"
 LOGO_PATH = os.getenv("LOGO_PATH", "media/logo.png")
+DEVELOPER = "@shadowxdeveloper"
+
+# === NEW API ENDPOINTS ===
+API_IP_INFO = "https://ip-info-api.hcjffjggjf.workers.dev/api/v1/ip"
+API_VEHICLE_FULL = "https://full-vehicle-info.vercel.app/"
+API_VEHICLE_MPARIVAHAN = "https://m-parivahan-api.onrender.com/api/vehicle"
+API_NAME_INFO = "https://name-info-2.vercel.app/info"
+API_HOTX = "https://hot-x-api.razaisback509.workers.dev/"
+API_AADHAAR_FAMILY = "https://aadhaar-family-xyz.rasiksarkarrasiksarkar.workers.dev/get-family-data"
+API_NUMINFO = "https://numinfo-1m.hcjffjggjf.workers.dev/"
+
+# API relay proxy URL
+API_RELAY_URL = os.getenv("API_RELAY_URL", "")

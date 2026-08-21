@@ -194,6 +194,23 @@ def init_db():
         )
     """)
 
+    # QR Payment tokens table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS qr_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT UNIQUE NOT NULL,
+            user_id INTEGER,
+            package TEXT,
+            amount INTEGER,
+            upi_id TEXT,
+            is_used INTEGER DEFAULT 0,
+            used_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            used_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -363,6 +380,19 @@ def save_lookup_result(user_id, username, api_data_json: str):
     )
     conn.commit()
     conn.close()
+
+
+def get_lookup_cache(user_id, query):
+    """Get the most recent cached lookup for a user by query."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM lookup_cache WHERE user_id = ? AND username = ? ORDER BY created_at DESC LIMIT 1",
+        (user_id, query),
+    )
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_user_lookup_history(user_id, limit=10):
@@ -566,6 +596,57 @@ def get_redeem_code_stats():
     
     conn.close()
     return {"total": total, "used": used, "unused": unused}
+
+
+# ==================== QR PAYMENT FUNCTIONS ====================
+
+def create_qr_payment(token, user_id, package, amount, upi_id):
+    """Create a new QR payment record."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO qr_payments (token, user_id, package, amount, upi_id) VALUES (?, ?, ?, ?, ?)",
+        (token, user_id, package, amount, upi_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_qr_payment_by_token(token):
+    """Get a QR payment record by token."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM qr_payments WHERE token = ?", (token,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def mark_qr_used(token, user_id):
+    """Mark a QR payment token as used."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE qr_payments SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE token = ?",
+        (user_id, token),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_pending_qr_payments():
+    """Get all pending QR payments (unused tokens in last 30 min)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        """SELECT * FROM qr_payments 
+           WHERE is_used = 0 
+           AND datetime(created_at) > datetime('now', '-30 minutes')
+           ORDER BY created_at DESC"""
+    )
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
 
 
 # ==================== BIDIRECTIONAL SYNC ====================

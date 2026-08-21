@@ -11,7 +11,7 @@ from telegram.error import Conflict, TimedOut, NetworkError
 
 import database as db
 import api_client
-from config import BOT_TOKEN, ADMIN_IDS, API_RELAY_URL
+from config import BOT_TOKEN, ADMIN_IDS
 from handlers import (
     start,
     help_command,
@@ -20,18 +20,18 @@ from handlers import (
     process_redeem_code,
     buy_plan,
     handle_callback,
-    handle_lookup,
+    handle_ip_lookup,
+    handle_numinfo_lookup,
+    handle_name_lookup,
+    handle_vehicle_full_lookup,
+    handle_parivahan_lookup,
+    handle_hotx_lookup,
+    handle_aadhaar_lookup,
     handle_screenshot,
-    demo_result,
-    demo_upi,
-    demo_vehicle,
-    handle_approve_command,
-    handle_reject_command,
-    check_user_channels,
-    handle_upi_lookup,
-    handle_vehicle_lookup,
+    handle_qr_screenshot,
     status_command,
-    handle_userdata_command,
+    handle_admin_text,
+    check_user_channels,
 )
 from keyboards import required_channels_keyboard
 from admin import (
@@ -44,7 +44,6 @@ from admin import (
     admin_total_users,
     admin_lookup_history,
     admin_broadcast,
-    handle_admin_text,
 )
 
 logging.basicConfig(
@@ -55,7 +54,6 @@ logger = logging.getLogger(__name__)
 
 
 async def _periodic_sync_job(context) -> None:
-    """Async wrapper for periodic SQLite ↔ JSON sync."""
     try:
         db.periodic_sync()
     except Exception as e:
@@ -63,107 +61,154 @@ async def _periodic_sync_job(context) -> None:
 
 
 async def error_handler(update: object, context) -> None:
-    """Handle errors gracefully."""
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
-
     if isinstance(context.error, Conflict):
-        logger.warning("Conflict detected - another instance may be running. Retrying...")
+        logger.warning("Conflict detected - another instance may be running.")
         return
-    
     if isinstance(context.error, (TimedOut, NetworkError)):
         logger.warning(f"Network error: {context.error}")
         return
-
     if isinstance(update, Update) and update.effective_message:
         try:
-            await update.effective_message.reply_text(
-                "⚠️ An error occurred. Please try again."
-            )
+            await update.effective_message.reply_text("An error occurred. Please try again.")
         except Exception:
             pass
 
 
 async def handle_text(update: Update, context):
-    """Route text messages to the correct handler."""
     text = update.message.text.strip()
 
-    # Admin text handler first
     if update.effective_user.id in ADMIN_IDS:
         handled = await handle_admin_text(update, context)
         if handled:
             return
 
-    # Check if awaiting screenshot - allow without channel check
     if context.user_data.get("awaiting_screenshot"):
         await update.message.reply_text(
-            "📸 Please send a <b>photo</b> or <b>document</b> as the payment screenshot.",
+            "Please send a photo or document as the payment screenshot.",
             parse_mode="HTML",
         )
         return
 
-    # Check if awaiting redeem code
     if context.user_data.get("awaiting_redeem_code"):
         context.user_data.pop("awaiting_redeem_code", None)
         await process_redeem_code(update, context)
         return
 
-    # Route by button text FIRST (before awaiting_number check)
-    # This prevents button presses from being treated as phone number input
-    if text == "📱 Phone Lookup":
-        # Clear any previous awaiting state
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_upi", None)
-        context.user_data.pop("awaiting_vehicle", None)
+    if text == "IP Lookup":
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
         await update.message.reply_text(
-            "🔍 <b>Enter Phone Number:</b>\n\n"
-            "Type the 10-digit phone number:\n"
-            "Example: <code>9876543210</code>\n\n"
-            "Returns name, address, SIM details, leak data & more.\n\n"
-            "💡 Or tap any button to cancel.",
+            "Enter a valid IP address:\nExample: 8.8.8.8\n\nOr tap any button to cancel.",
             parse_mode="HTML",
         )
-        context.user_data["awaiting_number"] = True
+        context.user_data["awaiting_ip"] = True
         return
 
-    if text == "💳 UPI Lookup":
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_vehicle", None)
+    if text == "Num Info":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
         await update.message.reply_text(
-            "💳 <b>Enter Phone Number for UPI Lookup:</b>\n\n"
-            "Type the 10-digit phone number:\n"
-            "Example: <code>9876543210</code>\n\n"
-            "💡 Or tap any button to cancel.",
+            "Enter a 10-digit phone number:\nExample: 9876543210\n\nOr tap any button to cancel.",
             parse_mode="HTML",
         )
-        context.user_data["awaiting_upi"] = True
+        context.user_data["awaiting_numinfo"] = True
         return
 
-    if text == "🚗 Vehicle Lookup":
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_upi", None)
+    if text == "Name Info":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
         await update.message.reply_text(
-            "🚗 <b>Enter Vehicle Registration Number:</b>\n\n"
-            "Type the plate number:\n"
-            "Example: <code>MH12AB1234</code>\n\n"
-            "💡 Or tap any button to cancel.",
+            "Enter a name to lookup:\nExample: Rahul Kumar\n\nOr tap any button to cancel.",
             parse_mode="HTML",
         )
-        context.user_data["awaiting_vehicle"] = True
+        context.user_data["awaiting_name"] = True
+        return
+
+    if text == "Vehicle Lookup":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
+        await update.message.reply_text(
+            "Enter vehicle registration number:\nExample: UK06BL1506\n\nOr tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_vehicle_full"] = True
+        return
+
+    if text == "M-Parivahan":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
+        await update.message.reply_text(
+            "Enter vehicle registration number:\nExample: MP09BH4640\n\nOr tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_parivahan"] = True
+        return
+
+    if text == "HotX Lookup":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_aadhaar", None)
+        await update.message.reply_text(
+            "Enter a 10-digit phone number:\nExample: 9876543210\n\nOr tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_hotx"] = True
+        return
+
+    if text == "Aadhaar Family":
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        await update.message.reply_text(
+            "Enter a 12-digit Aadhaar number:\nExample: 123456789012\n\nOr tap any button to cancel.",
+            parse_mode="HTML",
+        )
+        context.user_data["awaiting_aadhaar"] = True
         return
 
     routes = {
-        "💰 Buy Plan": "buy",
-        "🎁 Redeem Code": "redeem",
-        "❓ Help Guide": "help",
-        "🤳 Contact Admin": "contact",
-        "🔧 Admin Panel": "admin",
+        "Buy Plan": "buy",
+        "Redeem Code": "redeem",
+        "Help": "help",
+        "Contact Admin": "contact",
+        "Admin Panel": "admin",
     }
 
     if text in routes:
-        # Clear all awaiting states when other buttons are pressed
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_upi", None)
-        context.user_data.pop("awaiting_vehicle", None)
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
         route = routes[text]
         if route == "buy":
             await buy_plan(update, context)
@@ -177,37 +222,36 @@ async def handle_text(update: Update, context):
             await admin_start(update, context)
         return
 
-    # Admin panel buttons
     admin_routes = {
-        "👥 Total Users": admin_total_users,
-        "🔍 Lookup History": admin_lookup_history,
-        "✅ Activate Plan": admin_activate_plan,
-        "💳 Add Credits": admin_add_credits,
-        "👤 Check User": admin_check_user,
-        "🎁 Create Code": admin_create_code,
-        "📋 View All Codes": admin_view_codes,
-        "📢 Broadcast": admin_broadcast,
-        "🏥 API Health": status_command,
-        "🏠 Main Menu": admin_start,
+        "Total Users": admin_total_users,
+        "Lookup History": admin_lookup_history,
+        "Activate Plan": admin_activate_plan,
+        "Add Credits": admin_add_credits,
+        "Check User": admin_check_user,
+        "Create Code": admin_create_code,
+        "View All Codes": admin_view_codes,
+        "Broadcast": admin_broadcast,
+        "API Health": status_command,
+        "Main Menu": admin_start,
     }
 
     if text in admin_routes and update.effective_user.id in ADMIN_IDS:
-        context.user_data.pop("awaiting_number", None)
-        context.user_data.pop("awaiting_upi", None)
-        context.user_data.pop("awaiting_vehicle", None)
+        context.user_data.pop("awaiting_ip", None)
+        context.user_data.pop("awaiting_numinfo", None)
+        context.user_data.pop("awaiting_name", None)
+        context.user_data.pop("awaiting_vehicle_full", None)
+        context.user_data.pop("awaiting_parivahan", None)
+        context.user_data.pop("awaiting_hotx", None)
+        context.user_data.pop("awaiting_aadhaar", None)
         await admin_routes[text](update, context)
         return
 
-    # Enforce channel join for non-admins on all user routes
     if update.effective_user.id not in ADMIN_IDS:
         is_member, not_joined = await check_user_channels(update.effective_user.id, context.bot)
         if not is_member:
-            channel_list = "\n".join([f"• {ch}" for ch in not_joined])
+            channel_list = "\n".join([f"  {ch}" for ch in not_joined])
             join_text = (
-                "🔴 <b>Join Required Channels!</b>\n\n"
-                "You must join the following channels before using this bot:\n\n"
-                f"{channel_list}\n\n"
-                "After joining, tap the button below to verify."
+                f"Join Required Channels!\n\n{channel_list}\n\nJoin then tap verify."
             )
             await update.message.reply_text(
                 join_text,
@@ -216,108 +260,93 @@ async def handle_text(update: Update, context):
             )
             return
 
-    # If awaiting number for lookup - NOW process it (after button routing)
-    if context.user_data.get("awaiting_number"):
-        context.user_data.pop("awaiting_number", None)
-        # Channel check happens inside handle_lookup
-        await handle_lookup(update, context)
+    if context.user_data.get("awaiting_ip"):
+        context.user_data.pop("awaiting_ip", None)
+        await handle_ip_lookup(update, context)
         return
 
-    # If awaiting number for UPI lookup
-    if context.user_data.get("awaiting_upi"):
-        context.user_data.pop("awaiting_upi", None)
-        context.args = [text]
-        await handle_upi_lookup(update, context)
+    if context.user_data.get("awaiting_numinfo"):
+        context.user_data.pop("awaiting_numinfo", None)
+        await handle_numinfo_lookup(update, context)
         return
 
-    # If awaiting vehicle plate for vehicle lookup
-    if context.user_data.get("awaiting_vehicle"):
-        context.user_data.pop("awaiting_vehicle", None)
-        context.args = [text]
-        await handle_vehicle_lookup(update, context)
+    if context.user_data.get("awaiting_name"):
+        context.user_data.pop("awaiting_name", None)
+        await handle_name_lookup(update, context)
         return
 
-    # Default: show main menu
+    if context.user_data.get("awaiting_vehicle_full"):
+        context.user_data.pop("awaiting_vehicle_full", None)
+        await handle_vehicle_full_lookup(update, context)
+        return
+
+    if context.user_data.get("awaiting_parivahan"):
+        context.user_data.pop("awaiting_parivahan", None)
+        await handle_parivahan_lookup(update, context)
+        return
+
+    if context.user_data.get("awaiting_hotx"):
+        context.user_data.pop("awaiting_hotx", None)
+        await handle_hotx_lookup(update, context)
+        return
+
+    if context.user_data.get("awaiting_aadhaar"):
+        context.user_data.pop("awaiting_aadhaar", None)
+        await handle_aadhaar_lookup(update, context)
+        return
+
     await start(update, context)
 
 
 async def handle_photo(update: Update, context):
-    """Handle photo uploads (payment screenshots)."""
-    if context.user_data.get("awaiting_screenshot"):
+    if context.user_data.get("awaiting_qr_screenshot"):
+        await handle_qr_screenshot(update, context)
+    elif context.user_data.get("awaiting_screenshot"):
         await handle_screenshot(update, context)
 
 
 async def handle_document(update: Update, context):
-    """Handle document uploads (payment screenshots)."""
-    if context.user_data.get("awaiting_screenshot"):
+    if context.user_data.get("awaiting_qr_screenshot"):
+        await handle_qr_screenshot(update, context)
+    elif context.user_data.get("awaiting_screenshot"):
         await handle_screenshot(update, context)
 
 
 def main():
-    """Start the bot."""
     if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        print("❌ Error: Set your BOT_TOKEN in .env file or environment variables!")
-        print("Create a .env file with: BOT_TOKEN=your_token_here")
+        print("Error: Set your BOT_TOKEN in .env file!")
         return
 
     db.init_db()
-    print("✅ Database initialized")
+    print("Database initialized")
 
-    # Sync subscription data from user_data.json into SQLite
-    # This ensures data survives redeployments where .db file may be lost
     db.sync_from_json()
 
     app = ApplicationBuilder().token(BOT_TOKEN).get_updates_read_timeout(10).get_updates_connect_timeout(10).build()
 
-    # Only respond in private chats (DMs) - ignore all group messages/commands
     private_filter = filters.ChatType.PRIVATE
 
-    # Command handlers (DM only)
     app.add_handler(CommandHandler("start", start, filters=private_filter))
     app.add_handler(CommandHandler("help", help_command, filters=private_filter))
     app.add_handler(CommandHandler("admin", admin_start, filters=private_filter))
-    app.add_handler(CommandHandler("demo", demo_result, filters=private_filter))
-    app.add_handler(CommandHandler("demo_upi", demo_upi, filters=private_filter))
-    app.add_handler(CommandHandler("demo_vehicle", demo_vehicle, filters=private_filter))
-    app.add_handler(CommandHandler("approve", handle_approve_command, filters=private_filter))
-    app.add_handler(CommandHandler("reject", handle_reject_command, filters=private_filter))
-    app.add_handler(CommandHandler("upi", handle_upi_lookup, filters=private_filter))
-    app.add_handler(CommandHandler("vehicle", handle_vehicle_lookup, filters=private_filter))
     app.add_handler(CommandHandler("status", status_command, filters=private_filter))
-    app.add_handler(CommandHandler("userdata", handle_userdata_command, filters=private_filter))
-
-    # Callback handler (inline buttons)
-    # Note: CallbackQueryHandler in v21.0 does not support `filters`.
-    # Private-chat filtering is done inside handle_callback itself.
     app.add_handler(CallbackQueryHandler(handle_callback))
-
-    # Text message handler (DM only)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, handle_text))
-
-    # Photo/document handler (payment screenshots) - DM only
     app.add_handler(MessageHandler(filters.PHOTO & private_filter, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL & private_filter, handle_document))
-
-    # Add error handler
     app.add_error_handler(error_handler)
 
-    print("🚀 Phone OSINT Bot is starting...")
-    print(f"👤 Admin IDs: {ADMIN_IDS}")
+    print("HathixShadow OSINT Bot starting...")
+    print(f"Admin IDs: {ADMIN_IDS}")
 
-    # Start background health monitor with bot instance for admin notifications
     if app.job_queue:
         api_client.start_health_monitor(app.job_queue, bot=app.bot)
-
-        # Start periodic SQLite ↔ JSON sync every 5 minutes
         app.job_queue.run_repeating(
             _periodic_sync_job,
-            interval=300,  # 5 minutes
-            first=60,  # First sync 60 seconds after startup
+            interval=300,
+            first=60,
             name="periodic_data_sync",
         )
-        logger.info("[Sync] Periodic SQLite ↔ JSON sync started (interval: 5 min)")
-    else:
-        logger.warning("JobQueue not available — health monitor & sync disabled. Install python-telegram-bot[job-queue].")
 
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,

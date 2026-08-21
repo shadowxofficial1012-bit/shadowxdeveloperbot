@@ -1,5 +1,5 @@
 """
-Header Image Generator for Hathix Shadow Bot.
+Header Image Generator for HathixShadow OSINT Bot.
 Generates branded welcome images for the /start command.
 """
 
