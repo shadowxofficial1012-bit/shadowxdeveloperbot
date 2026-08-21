@@ -257,60 +257,35 @@ SERVICE_TITLES = {
     "aadhaar_family": "AADHAAR FAMILY TRACE",
 }
 
-FIELD_LABELS = {
-    "ip": "IP Address",
-    "country": "Country",
-    "countryCode": "Country Code",
-    "region": "Region",
-    "regionName": "Region Name",
-    "city": "City",
-    "zip": "ZIP Code",
-    "lat": "Latitude",
-    "lon": "Longitude",
-    "timezone": "Timezone",
-    "isp": "ISP",
-    "org": "Organization",
-    "as": "AS Number",
-    "asname": "AS Name",
-    "mobile": "Mobile",
-    "proxy": "Proxy",
-    "hosting": "Hosting",
-    "query": "Query",
-    "number": "Number",
-    "name": "Name",
-    "operator": "Operator",
-    "state": "State",
-    "country_name": "Country",
-    "carrier": "Carrier",
-    "type": "Type",
-    "owner_name": "Owner Name",
-    "father_name": "Father Name",
-    "address": "Address",
-    "village": "Village",
-    "district": "District",
-    "registration_number": "Registration No",
-    "owner": "Owner",
-    "vehicle_class": "Vehicle Class",
-    "fuel_type": "Fuel Type",
-    "maker_model": "Maker Model",
-    "insurance_upto": "Insurance Upto",
-    "fitness_upto": "Fitness Upto",
-    "tax_upto": "Tax Upto",
-    "pucc_upto": "PUC Upto",
-    "rc_status": "RC Status",
-    "engine_number": "Engine No",
-    "chassis_number": "Chassis No",
-    "engine_cc": "Engine CC",
-    "seating_capacity": "Seating",
-    "standing_capacity": "Standing",
-    "wheel_base": "Wheel Base",
-    "unladen_weight": "Unladen Weight",
-    "gross_weight": "Gross Weight",
-    "color": "Color",
-    "norms_type": "Norms Type",
-    "status": "Status",
-    "data": "Data",
-    "success": "Success",
+FIELD_EMOJIS = {
+    "name": "👤", "fullname": "👤", "full_name": "👤", "owner_name": "👤", "owner": "👤",
+    "father_name": "👨", "fathername": "👨",
+    "phone": "📞", "phone2": "📞", "phone3": "📞", "number": "📞", "mobile": "📞",
+    "mobileoperator": "📡", "operator": "📡", "carrier": "📡",
+    "address": "📍", "adres": "📍", "adres2": "📍", "location": "📍",
+    "city": "🏙", "state": "🗺", "region": "🗺", "regionname": "🗺", "indianstate": "🗺",
+    "country": "🌍", "countryname": "🌍", "countrycode": "🌍",
+    "district": "🏘", "village": "🏘",
+    "pincode": "📮", "zip": "📮", "zipcode": "📮",
+    "isp": "📡", "org": "🏢", "organization": "🏢", "as": "📡", "asname": "📡",
+    "latitude": "📍", "lat": "📍", "longitude": "📍", "lon": "📍",
+    "timezone": "🕐",
+    "registration_number": "🔢", "registrationno": "🔢",
+    "vehicle_class": "🚘", "vehicleclass": "🚘",
+    "fuel_type": "⛽", "fueltype": "⛽",
+    "maker_model": "🚘", "makemodel": "🚘",
+    "insurance_upto": "🛡", "insuranceupto": "🛡",
+    "fitness_upto": "✅", "fitnessupto": "✅",
+    "tax_upto": "💰", "taxupto": "💰",
+    "pucc_upto": "📋", "puccupto": "📋",
+    "rc_status": "📋", "rcstatus": "📋",
+    "engine_number": "⚙", "engineno": "⚙", "enginnumber": "⚙",
+    "chassis_number": "⚙", "chassisno": "⚙",
+    "engine_cc": "⚙", "enginecc": "⚙",
+    "color": "🎨", "colour": "🎨",
+    "status": "📊", "title": "📄", "source": "📄",
+    "query": "🔍", "developer": "💻",
+    "response_time_ms": "⏱", "responsetimems": "⏱",
 }
 
 
@@ -318,74 +293,109 @@ def _fmt_value(val, key=""):
     if val is None or val == "":
         return "—"
     s = str(val).strip()
-    if not s:
+    if not s or s.lower() in ("none", "null", "n/a"):
         return "—"
-    if key in ("mobile", "proxy", "hosting"):
-        return "Yes" if s.lower() in ("true", "1", "yes") else "No"
     return s
 
 
 def _fmt_field(key, val):
-    label = FIELD_LABELS.get(key, key.replace("_", " ").title())
+    emoji = FIELD_EMOJIS.get(key.lower(), "  •")
+    label = key.replace("_", " ").replace("-", " ").title()
     v = _fmt_value(val, key)
-    return f"  <b>{label}:</b> {escape_html(v)}"
+    return f"{emoji} <b>{label}:</b> {escape_html(v)}"
 
 
-def _fmt_dict_lines(data: dict, indent: int = 1, skip_keys=None) -> list:
-    lines = []
+def _flatten_record(data: dict, skip_keys=None) -> list:
     skip_keys = skip_keys or {"success", "status"}
+    lines = []
     for key, value in data.items():
-        if key in skip_keys:
+        if key.lower() in skip_keys:
             continue
         if isinstance(value, dict):
-            lines.append(f"{'  ' * indent}<b>┌ {key.replace('_', ' ').upper()}</b>")
-            lines.extend(_fmt_dict_lines(value, indent + 1, skip_keys))
+            lines.append(f"\n  <b>── {key.replace('_', ' ').upper()} ──</b>")
+            lines.extend(_flatten_record(value, skip_keys))
         elif isinstance(value, list):
             if value:
-                lines.append(f"{'  ' * indent}<b>┌ {key.replace('_', ' ').upper()} ({len(value)})</b>")
-                for i, item in enumerate(value[:8], 1):
+                for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
-                        lines.append(f"{'  ' * (indent+1)}<b>── Record {i} ──</b>")
-                        lines.extend(_fmt_dict_lines(item, indent + 2, skip_keys))
+                        lines.append(f"\n  <b>Record {i}</b>")
+                        lines.extend(_flatten_record(item, skip_keys))
                     else:
-                        lines.append(f"{'  ' * (indent+1)}{i}. {_fmt_value(item)}")
-                if len(value) > 8:
-                    lines.append(f"{'  ' * (indent+1)}... +{len(value)-8} more")
+                        lines.append(f"    {_fmt_field('item', item)}")
+                if len(value) > 5:
+                    lines.append(f"    ... +{len(value)-5} more")
         else:
-            lines.append(f"{'  ' * indent}{_fmt_field(key, value)}")
+            lines.append(f"    {_fmt_field(key, value)}")
+    return lines
+
+
+def _format_ip(data):
+    lines = []
+    d = data.get("data", data)
+    fields = [
+        ("ip", d.get("query") or d.get("ip")),
+        ("country", d.get("country")),
+        ("countryCode", d.get("countryCode")),
+        ("region", d.get("regionName")),
+        ("city", d.get("city")),
+        ("zip", d.get("zip")),
+        ("latitude", d.get("lat")),
+        ("longitude", d.get("lon")),
+        ("timezone", d.get("timezone")),
+        ("isp", d.get("isp")),
+        ("org", d.get("org")),
+        ("as", d.get("as")),
+    ]
+    for key, val in fields:
+        if val:
+            lines.append(f"    {_fmt_field(key, val)}")
+    return lines
+
+
+def _format_vehicle(data):
+    lines = []
+    d = data.get("data", data)
+    if isinstance(d, dict):
+        for key, val in d.items():
+            if isinstance(val, (dict, list)):
+                continue
+            lines.append(f"    {_fmt_field(key, val)}")
     return lines
 
 
 def format_text_report(data: dict, service_name: str, query: str) -> str:
+    from datetime import datetime
     emoji = SERVICE_EMOJIS.get(service_name, "🔍")
     title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
     api_data = data.get("data", data)
 
     lines = []
-
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append(f"  {emoji}  <b>{BRAND_NAME} OSINT</b>")
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append("")
-    lines.append(f"  <b>{title}</b>")
-    lines.append(f"────────────────────────────────")
-    lines.append(f"  <b>Target:</b> {escape_html(query)}")
-    from datetime import datetime
-    lines.append(f"  <b>Time:</b>   {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
-    lines.append(f"────────────────────────────────")
+    lines.append(f"  {emoji} <b>{title}</b>")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"  🎯 <b>Target:</b> {escape_html(query)}")
+    lines.append(f"  🕐 <b>Time:</b> {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append("")
 
-    if isinstance(api_data, dict):
-        lines.extend(_fmt_dict_lines(api_data))
+    if service_name == "ip_info":
+        lines.extend(_format_ip(data))
+    elif service_name in ("vehicle_full", "vehicle_parivahan"):
+        lines.extend(_format_vehicle(data))
+    elif isinstance(api_data, dict):
+        lines.extend(_flatten_record(api_data))
     elif isinstance(api_data, list):
-        for i, item in enumerate(api_data[:10], 1):
-            lines.append(f"  <b>── Record {i} ──</b>")
+        for i, item in enumerate(api_data[:5], 1):
+            lines.append(f"  <b>Record {i}</b>")
             if isinstance(item, dict):
-                lines.extend(_fmt_dict_lines(item, 1))
+                lines.extend(_flatten_record(item))
             else:
                 lines.append(f"    {_fmt_value(item)}")
     else:
-        lines.append(f"  {_fmt_value(api_data)}")
+        lines.append(f"    {_fmt_value(api_data)}")
 
     lines.append("")
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
