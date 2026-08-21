@@ -1,47 +1,49 @@
-# 🔍 Phone OSINT Bot by @HATHI02
+# HathixShadow OSINT Bot
 
-A powerful Telegram bot for Phone Number OSINT (Open Source Intelligence) lookups with a built-in subscription/payment system.
+A multi-service Telegram OSINT bot by @shadowxdeveloper with QR-based payments, 7 API lookup services, and dark-themed PDF reports.
 
 ## Features
 
-- 🔍 **Phone Number OSINT Lookup** — Get detailed info (name, address, SIM, IMEI) from any phone number
-- 💾 **Data Leak Check** — Check if a number appears in data breaches
-- 📡 **SIM & Device Info** — Carrier, state, connection type, IMEI details
-- 💳 **UPI Lookup** — Get UPI accounts, bank details, and transaction history linked to a phone number
-- 🚗 **Vehicle Lookup** — Get vehicle registration details (owner, insurance, tax) from plate number
-- 🎁 **Redeem Codes** — Admin-generated codes for free subscription access
-- 📦 **Subscription System** — Unlimited lookups for a fixed duration (Daily/Weekly/Monthly)
-- 📸 **Payment Screenshots** — Upload payment proof for admin verification
-- 📄 **PDF Reports** — Download styled PDF reports for every lookup
-- 🖼 **Image Reports** — Export lookup results as styled PNG images
-- 🔁 **Re-export History** — Re-download past reports without using credits
-- 👮 **Admin Panel** — Manage users, approve payments, create redeem codes, broadcast messages
-- 👥 **User Management** — Ban/unban users, activate plans, check user details
-- 📊 **Statistics** — Track total users, lookups, revenue, pending payments
-- 🛡 **Rate Limiting** — Prevents API abuse (5 lookups/minute)
-- 📢 **Channel Enforcement** — Users must join required channels before using the bot
-- 🎨 **Branded UI** — Custom header images, dark hacker-themed PDF reports
+- **7 OSINT Services** — IP, Phone, Name, Vehicle, M-Parivahan, HotX, Aadhaar Family
+- **QR Payment System** — Auto-generated QR codes with exact amount, single-use tokens
+- **PDF Reports** — Dark hacker-themed PDF download for every lookup
+- **Subscription System** — Unlimited lookups for Daily/Weekly/Monthly plans
+- **Admin Panel** — Manage users, approve payments, create redeem codes, broadcast
+- **Channel Enforcement** — Users must join required channels before use
+- **Rate Limiting** — 5 lookups/minute per user
+- **Redeem Codes** — Admin-generated codes for free access
+
+## Services
+
+| Service | Input | Description |
+|---------|-------|-------------|
+| IP Lookup | IP address | ISP, location, timezone, coordinates |
+| Num Info | 10-digit phone | Telecom, carrier, location |
+| Name Info | Full name | Identity details |
+| Vehicle Lookup | Plate number | Full vehicle registration info |
+| M-Parivahan | Plate number | Government vehicle database |
+| HotX Lookup | 10-digit phone | Deep phone intelligence |
+| Aadhaar Family | 12-digit Aadhaar | Family member trace |
 
 ## Setup
 
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/shadowgamer543254-droid/telegram-osint-bot.git
-cd telegram-osint-bot
+git clone https://github.com/shadowxofficial1012-bit/shadowxdeveloperbot.git
+cd shadowxdeveloperbot
 pip install -r requirements.txt
 ```
 
 ### 2. Configure
 
-Create a `.env` file or set environment variables:
+Create a `.env` file:
 
 ```
-BOT_TOKEN=your_bot_token_here
-ADMIN_IDS=your_telegram_id_1,your_telegram_id_2
-UPI_ID=your_upi_id
-UPI_NAME=your_name
-OSINT_API_KEY=your_api_key
+BOT_TOKEN=your_bot_token
+ADMIN_IDS=7392346621,8722759285
+UPI_ID=your_upi_id@paytm
+UPI_NAME=Your Name
 API_RELAY_URL=https://your-relay.workers.dev/proxy
 ```
 
@@ -51,109 +53,83 @@ API_RELAY_URL=https://your-relay.workers.dev/proxy
 python main.py
 ```
 
-## Bot Commands
-
-| Command | Description |
-|---------|-------------|
-| `/start` | Start the bot & show main menu |
-| `/help` | Show usage instructions |
-| `/admin` | Access admin panel (admin only) |
-| `/demo` | See a demo phone lookup report |
-| `/demo_upi` | See a demo UPI lookup report |
-| `/demo_vehicle` | See a demo vehicle lookup report |
-| `/upi <number>` | UPI lookup directly |
-| `/vehicle <plate>` | Vehicle lookup directly |
-| `/approve <tx_id>` | Approve a payment (admin) |
-| `/reject <tx_id>` | Reject a payment (admin) |
-
 ## Subscription Packages
 
 | Package | Duration | Price |
 |---------|----------|-------|
-| Daily | 24 hours | ₹10 |
-| Weekly | 7 days | ₹100 |
-| Monthly | 30 days | ₹200 |
-
-Unlimited lookups while subscription is active.
-
-## Admin Panel
-
-Access via `/admin` command or 🔧 Admin Panel button:
-- 👥 View all users with status
-- 🔍 Lookup history (all users)
-- ✅ Activate subscription plans
-- 💳 Add credits manually
-- 👤 Check user details
-- 🎁 Create redeem codes (single or bulk)
-- 📋 View all redeem codes
-- 📢 Broadcast messages to all users
-- ✅/❌ Approve/reject payment screenshots
+| 1 Day Pack | 24 hours | ₹20 |
+| 1 Week Pack | 168 hours | ₹200 |
+| 1 Month Pack | 720 hours | ₹400 |
 
 ## Payment Flow
 
-1. User taps "💰 Buy Plan"
-2. Selects a package (Daily/Weekly/Monthly)
-3. Scans UPI QR code and pays
-4. Uploads payment screenshot
-5. Admin receives notification with screenshot
-6. Admin approves → subscription activated instantly
+1. User taps "Buy Plan"
+2. Selects a package
+3. Bot generates a **QR code with exact UPI amount** and unique single-use token
+4. User scans QR and pays the exact amount
+5. User sends payment screenshot
+6. QR token is marked as used (single-use enforcement)
+7. Admin receives screenshot notification with approve/reject buttons
+8. Admin approves → subscription activated instantly
+
+## Admin Panel
+
+Access via `/admin` command or the Admin Panel button:
+
+| Action | Description |
+|--------|-------------|
+| Total Users | View all users with status |
+| Lookup History | All recent lookups across users |
+| Activate Plan | Manually add subscription hours |
+| Add Credits | Add credits to a user |
+| Check User | View detailed user info |
+| Create Code | Generate single or bulk redeem codes |
+| View All Codes | List all redeem codes |
+| Broadcast | Send message to all users |
+| API Health | Check all API endpoint status |
 
 ## API Endpoints
 
-The bot uses three OSINT APIs:
-
-| Endpoint | Service | Description |
-|----------|---------|-------------|
-| `ft-osint-api.duckdns.org/api/number` | Phone Lookup | Detailed phone records (name, address, SIM) |
-| `ft-osint-api.duckdns.org/api/numleak` | Data Leak | Breach/leak data + calltracer info |
-| `ft-osint-api.duckdns.org/api/numtoupi` | UPI Lookup | UPI accounts linked to phone number |
-| `vh-num.vercel.app/fetch` | Vehicle Lookup | Vehicle registration details |
-
-**Note:** If Railway blocks direct API access, use the Cloudflare Worker relay (see `relay/README.md`).
+| Endpoint | Service |
+|----------|---------|
+| `ip-info-api.hcjffjggjf.workers.dev` | IP Info |
+| `full-vehicle-info.vercel.app` | Vehicle Full |
+| `m-parivahan-api.onrender.com` | M-Parivahan |
+| `name-info-2.vercel.app` | Name Info |
+| `hot-x-api.razaisback509.workers.dev` | HotX |
+| `aadhaar-family-xyz.rasiksarkarrasiksarkar.workers.dev` | Aadhaar Family |
+| `numinfo-1m.hcjffjggjf.workers.dev` | Num Info |
 
 ## File Structure
 
 ```
-telegram-osint-bot/
+shadowxdeveloperbot/
 ├── main.py              # Bot entry point & message routing
-├── config.py            # Configuration (API URLs, keys, packages)
-├── database.py          # SQLite database layer
-├── api_client.py        # OSINT API integration (all endpoints)
-├── handlers.py          # User command handlers (lookup, UPI, vehicle)
+├── config.py            # Configuration (API URLs, packages, branding)
+├── database.py          # SQLite database (users, transactions, QR codes)
+├── api_client.py        # 7 OSINT API integrations
+├── handlers.py          # All user handlers (lookups, payments, callbacks)
 ├── admin.py             # Admin panel handlers
-├── keyboards.py         # Telegram reply & inline keyboards
-├── exporter.py          # Styled PNG report generator
-├── pdf_exporter.py      # Dark hacker-themed PDF report generator
+├── keyboards.py         # Reply & inline keyboards
+├── qr_payment.py        # QR code generator with exact UPI amount
+├── pdf_exporter.py      # Dark-themed PDF report generator
 ├── header.py            # Branded header image generator
+├── user_data_store.py   # JSON user data store (backup)
 ├── requirements.txt     # Python dependencies
-├── Dockerfile           # Docker configuration for Railway
-├── Procfile             # Railway process file
+├── Dockerfile           # Docker configuration
+├── Procfile             # Process file
 ├── railway.json         # Railway deployment config
-├── relay/               # Cloudflare Worker relay (separate deploy)
-│   ├── worker.js        # Relay worker code
-│   ├── wrangler.example.toml  # Wrangler config template
-│   └── README.md        # Relay deployment guide
 └── osint_bot.db         # SQLite database (auto-created)
 ```
 
-## Relay Worker
-
-If Railway blocks direct API access, deploy the Cloudflare Worker relay:
-
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages
-2. Create a new Worker → paste `relay/worker.js` code
-3. Set `API_RELAY_URL` in Railway environment variables
-
-See `relay/README.md` for detailed instructions.
-
 ## Deployment
 
-### Railway (Recommended)
+### Railway
 
 1. Push to GitHub
 2. Connect repo to Railway
-3. Set environment variables in Railway dashboard
-4. Railway auto-deploys using Dockerfile
+3. Set environment variables
+4. Auto-deploys via Dockerfile
 
 ### Local
 
