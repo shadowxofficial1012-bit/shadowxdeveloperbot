@@ -199,9 +199,14 @@ async def handle_ip_lookup(update, context):
         await update.message.reply_text("Enter a valid IP.\nExample: 8.8.8.8", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up IP: <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_ip_info(query), timeout=20)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_ip_info(query), timeout=20)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"IP lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -219,9 +224,14 @@ async def handle_numinfo_lookup(update, context):
         await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up number: <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_numinfo(query), timeout=20)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_numinfo(query), timeout=20)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"NumInfo lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -239,9 +249,14 @@ async def handle_name_lookup(update, context):
         await update.message.reply_text("Enter a name.\nExample: Rahul Kumar", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up name: <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_name_info(query), timeout=20)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_name_info(query), timeout=20)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"Name lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -259,9 +274,14 @@ async def handle_vehicle_full_lookup(update, context):
         await update.message.reply_text("Enter a valid vehicle number.\nExample: UK06BL1506", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up vehicle: <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_vehicle_full(query), timeout=25)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_vehicle_full(query), timeout=25)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"Vehicle lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -279,9 +299,14 @@ async def handle_parivahan_lookup(update, context):
         await update.message.reply_text("Enter a valid vehicle number.\nExample: MP09BH4640", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up (M-Parivahan): <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_vehicle_parivahan(query), timeout=25)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_vehicle_parivahan(query), timeout=25)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"Parivahan lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -299,9 +324,14 @@ async def handle_hotx_lookup(update, context):
         await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up (HotX): <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_hotx(query), timeout=20)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_hotx(query), timeout=20)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"HotX lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -319,9 +349,14 @@ async def handle_aadhaar_lookup(update, context):
         await update.message.reply_text("Enter a valid 12-digit Aadhaar.\nExample: 123456789012", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text(f"Looking up Aadhaar family: <code>{query}</code>...", parse_mode="HTML")
-    try: result = await asyncio.wait_for(api_client.lookup_aadhaar_family(query), timeout=20)
+    try:
+        result = await asyncio.wait_for(api_client.lookup_aadhaar_family(query), timeout=20)
     except asyncio.TimeoutError:
         await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        return
+    except Exception as e:
+        logger.error(f"Aadhaar lookup error: {e}")
+        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
@@ -562,8 +597,6 @@ async def handle_callback(update, context):
 
 
 async def handle_admin_text(update, context):
-    user = update.effective_user
-    if user.id not in ADMIN_IDS: return False
     return False
 
 

@@ -31,10 +31,8 @@ from handlers import (
     handle_screenshot,
     handle_qr_screenshot,
     status_command,
-    handle_admin_text,
     check_user_channels,
 )
-from keyboards import required_channels_keyboard
 from admin import (
     admin_start,
     admin_activate_plan,
@@ -45,6 +43,7 @@ from admin import (
     admin_total_users,
     admin_lookup_history,
     admin_broadcast,
+    handle_admin_text,
 )
 
 logging.basicConfig(

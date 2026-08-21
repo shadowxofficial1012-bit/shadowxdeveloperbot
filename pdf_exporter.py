@@ -15,6 +15,12 @@ except ImportError:
     BRAND_TAGLINE = "OSINT Bot"
     DEVELOPER = "@shadowxdeveloper"
 
+
+def escape_html(text):
+    if not text:
+        return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 # Dark hacker color palette
 DARK_BG = (18, 18, 24)
 SECTION_BG = (28, 28, 40)
