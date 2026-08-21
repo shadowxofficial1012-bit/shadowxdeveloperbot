@@ -284,7 +284,6 @@ FIELD_LABELS = {
     "district": "District",
     "registration_number": "Registration No",
     "owner": "Owner",
-    "father_name": "Father Name",
     "vehicle_class": "Vehicle Class",
     "fuel_type": "Fuel Type",
     "maker_model": "Maker Model",
@@ -320,10 +319,10 @@ def _fmt_value(val, key=""):
     return s
 
 
-def _fmt_field(key, val, indent=1):
+def _fmt_field(key, val):
     label = FIELD_LABELS.get(key, key.replace("_", " ").title())
     v = _fmt_value(val, key)
-    return f"{'  ' * indent}  {label}: {v}"
+    return f"  <b>{label}:</b> {escape_html(v)}"
 
 
 def _fmt_dict_lines(data: dict, indent: int = 1, skip_keys=None) -> list:
@@ -333,21 +332,21 @@ def _fmt_dict_lines(data: dict, indent: int = 1, skip_keys=None) -> list:
         if key in skip_keys:
             continue
         if isinstance(value, dict):
-            lines.append(f"{'  ' * indent}┌─ {key.replace('_', ' ').upper()}")
+            lines.append(f"{'  ' * indent}<b>┌ {key.replace('_', ' ').upper()}</b>")
             lines.extend(_fmt_dict_lines(value, indent + 1, skip_keys))
         elif isinstance(value, list):
             if value:
-                lines.append(f"{'  ' * indent}┌─ {key.replace('_', ' ').upper()} ({len(value)})")
+                lines.append(f"{'  ' * indent}<b>┌ {key.replace('_', ' ').upper()} ({len(value)})</b>")
                 for i, item in enumerate(value[:8], 1):
                     if isinstance(item, dict):
-                        lines.append(f"{'  ' * (indent+1)}── Record {i} ──")
+                        lines.append(f"{'  ' * (indent+1)}<b>── Record {i} ──</b>")
                         lines.extend(_fmt_dict_lines(item, indent + 2, skip_keys))
                     else:
-                        lines.append(f"{'  ' * (indent+1)}  {i}. {_fmt_value(item)}")
+                        lines.append(f"{'  ' * (indent+1)}{i}. {_fmt_value(item)}")
                 if len(value) > 8:
-                    lines.append(f"{'  ' * (indent+1)}  ... +{len(value)-8} more")
+                    lines.append(f"{'  ' * (indent+1)}... +{len(value)-8} more")
         else:
-            lines.append(_fmt_field(key, value, indent))
+            lines.append(f"{'  ' * indent}{_fmt_field(key, value)}")
     return lines
 
 
@@ -356,26 +355,25 @@ def format_text_report(data: dict, service_name: str, query: str) -> str:
     title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
     api_data = data.get("data", data)
 
-    box_w = 42
     lines = []
 
-    lines.append(f"{'━' * box_w}")
-    lines.append(f"  {emoji}  {BRAND_NAME} OSINT")
-    lines.append(f"{'━' * box_w}")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"  {emoji}  <b>{BRAND_NAME} OSINT</b>")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append("")
-    lines.append(f"  {title}")
-    lines.append(f"{'─' * box_w}")
-    lines.append(f"  Target: {query}")
+    lines.append(f"  <b>{title}</b>")
+    lines.append(f"────────────────────────────────")
+    lines.append(f"  <b>Target:</b> {escape_html(query)}")
     from datetime import datetime
-    lines.append(f"  Time:   {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
-    lines.append(f"{'─' * box_w}")
+    lines.append(f"  <b>Time:</b>   {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
+    lines.append(f"────────────────────────────────")
     lines.append("")
 
     if isinstance(api_data, dict):
         lines.extend(_fmt_dict_lines(api_data))
     elif isinstance(api_data, list):
         for i, item in enumerate(api_data[:10], 1):
-            lines.append(f"  ── Record {i} {'─' * 20}")
+            lines.append(f"  <b>── Record {i} ──</b>")
             if isinstance(item, dict):
                 lines.extend(_fmt_dict_lines(item, 1))
             else:
@@ -384,7 +382,7 @@ def format_text_report(data: dict, service_name: str, query: str) -> str:
         lines.append(f"  {_fmt_value(api_data)}")
 
     lines.append("")
-    lines.append(f"{'━' * box_w}")
-    lines.append(f"  {BRAND_NAME} • {DEVELOPER}")
-    lines.append(f"{'━' * box_w}")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"  <b>{BRAND_NAME}</b> • {escape_html(DEVELOPER)}")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)

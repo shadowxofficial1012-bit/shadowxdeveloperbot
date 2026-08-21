@@ -92,15 +92,14 @@ async def _send_result(update, context, data, service_name, query, user):
     emoji = SERVICE_EMOJIS.get(service_name, "🔍")
     title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
     escaped = escape_html(text)
-    code_block = f"<pre>{escaped}</pre>"
-    if len(code_block) + 50 > MAX_MSG_LEN:
-        part1 = escape_html(text[:3800])
-        part2 = escape_html(text[3800:])
-        await update.message.reply_text(f"<pre>{part1}</pre>", parse_mode="HTML")
+    if len(escaped) + 100 > MAX_MSG_LEN:
+        part1 = escape_html(text[:3900])
+        part2 = escape_html(text[3900:])
+        await update.message.reply_text(part1, parse_mode="HTML")
         if part2:
-            await update.message.reply_text(f"<pre>{part2}</pre>", parse_mode="HTML")
+            await update.message.reply_text(part2, parse_mode="HTML")
     else:
-        await update.message.reply_text(code_block, parse_mode="HTML")
+        await update.message.reply_text(escaped, parse_mode="HTML")
     _record_lookup(user.id)
     if user.id not in ADMIN_IDS:
         db.record_lookup(user.id)
