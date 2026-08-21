@@ -25,6 +25,85 @@ RATE_LIMIT_MAX = 5
 RATE_LIMIT_WINDOW = 60
 _rate_limit_tracker = defaultdict(list)
 
+# ─── Animated Loading ────────────────────────────────────────
+SPINNERS = {
+    "ip":       ["🌐", "🌍", "🌎", "🌏"],
+    "num":      ["📡", "🔍", "🔎", "📡"],
+    "name":     ["👤", "🔍", "🔎", "👤"],
+    "vehicle":  ["🚗", "🏎", "🚙", "🚕"],
+    "parivahan":["🏛", "🚗", "🏛", "🚗"],
+    "hotx":     ["🔥", "📡", "🔍", "🔥"],
+    "aadhaar":  ["👨‍👩‍👧", "🔍", "🔎", "👨‍👩‍👧"],
+    "default":  ["⚡", "🔍", "📡", "⚡"],
+}
+
+SERVICE_LABELS = {
+    "ip": "IP Lookup",
+    "num": "Number Intel",
+    "name": "Name Intel",
+    "vehicle": "Vehicle Lookup",
+    "parivahan": "M-Parivahan",
+    "hotx": "HotX Deep Scan",
+    "aadhaar": "Aadhaar Family",
+}
+
+SERVICE_BARS = {
+    "ip":       "▓▓░░░░░░",
+    "num":      "▓▓▓░░░░░",
+    "name":     "▓▓▓░░░░░",
+    "vehicle":  "▓▓▓▓░░░░",
+    "parivahan":"▓▓▓▓░░░░",
+    "hotx":     "▓▓▓▓▓░░░",
+    "aadhaar":  "▓▓▓░░░░░",
+}
+
+
+async def _animated_loading(message, service_key, query, api_coro):
+    spinner = SPINNERS.get(service_key, SPINNERS["default"])
+    label = SERVICE_LABELS.get(service_key, "Lookup")
+    bar = SERVICE_BARS.get(service_key, "▓▓▓░░░░░")
+    done = False
+    result = [None]
+
+    async def run_api():
+        try:
+            result[0] = await api_coro
+        except Exception as e:
+            result[0] = {"success": False, "error": str(e)}
+        nonlocal done
+        done = True
+
+    task = asyncio.create_task(run_api())
+    i = 0
+    stages = [
+        f"  {spinner[0]} <b>{label}</b>\n\n"
+        f"  🎯 <code>{query}</code>\n\n"
+        f"  {bar}\n"
+        f"  ⚡ Initializing scan...",
+        f"  {spinner[1]} <b>{label}</b>\n\n"
+        f"  🎯 <code>{query}</code>\n\n"
+        f"  ▓▓▓▓░░░░\n"
+        f"  🔎 Querying databases...",
+        f"  {spinner[2]} <b>{label}</b>\n\n"
+        f"  🎯 <code>{query}</code>\n\n"
+        f"  ▓▓▓▓▓▓░░\n"
+        f"  📡 Fetching results...",
+        f"  {spinner[3]} <b>{label}</b>\n\n"
+        f"  🎯 <code>{query}</code>\n\n"
+        f"  ▓▓▓▓▓▓▓░\n"
+        f"  ⏳ Processing data...",
+    ]
+    while not done:
+        try:
+            await message.edit_text(stages[i % len(stages)], parse_mode="HTML")
+        except Exception:
+            pass
+        i += 1
+        await asyncio.sleep(0.4)
+
+    await task
+    return result[0]
+
 
 def _check_rate_limit(user_id):
     now = time.time()
@@ -198,20 +277,23 @@ async def handle_ip_lookup(update, context):
     if not query or len(query) < 3:
         await update.message.reply_text("Enter a valid IP.\nExample: 8.8.8.8", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up IP: <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_ip_info(query), timeout=20)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "ip", query, api_client.lookup_ip_info(query)),
+            timeout=20
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"IP lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "ip_info", query, user)
 
@@ -223,20 +305,23 @@ async def handle_numinfo_lookup(update, context):
     if not query or not query.isdigit() or len(query) < 10:
         await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up number: <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_numinfo(query), timeout=20)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "num", query, api_client.lookup_numinfo(query)),
+            timeout=20
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"NumInfo lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "num_info", query, user)
 
@@ -248,20 +333,23 @@ async def handle_name_lookup(update, context):
     if not query or len(query) < 2:
         await update.message.reply_text("Enter a name.\nExample: Rahul Kumar", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up name: <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_name_info(query), timeout=20)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "name", query, api_client.lookup_name_info(query)),
+            timeout=20
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"Name lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "name_info", query, user)
 
@@ -273,20 +361,23 @@ async def handle_vehicle_full_lookup(update, context):
     if not query or len(query) < 5:
         await update.message.reply_text("Enter a valid vehicle number.\nExample: UK06BL1506", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up vehicle: <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_vehicle_full(query), timeout=25)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "vehicle", query, api_client.lookup_vehicle_full(query)),
+            timeout=25
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"Vehicle lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "vehicle_full", query, user)
 
@@ -298,20 +389,23 @@ async def handle_parivahan_lookup(update, context):
     if not query or len(query) < 5:
         await update.message.reply_text("Enter a valid vehicle number.\nExample: MP09BH4640", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up (M-Parivahan): <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_vehicle_parivahan(query), timeout=25)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "parivahan", query, api_client.lookup_vehicle_parivahan(query)),
+            timeout=25
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"Parivahan lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "vehicle_parivahan", query, user)
 
@@ -323,20 +417,23 @@ async def handle_hotx_lookup(update, context):
     if not query or not query.isdigit() or len(query) < 10:
         await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up (HotX): <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_hotx(query), timeout=20)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "hotx", query, api_client.lookup_hotx(query)),
+            timeout=20
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"HotX lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "hotx", query, user)
 
@@ -348,20 +445,23 @@ async def handle_aadhaar_lookup(update, context):
     if not query or not query.isdigit() or len(query) < 12:
         await update.message.reply_text("Enter a valid 12-digit Aadhaar.\nExample: 123456789012", reply_markup=main_menu_keyboard(), parse_mode="HTML")
         return
-    loading_msg = await update.message.reply_text(f"Looking up Aadhaar family: <code>{query}</code>...", parse_mode="HTML")
+    loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
-        result = await asyncio.wait_for(api_client.lookup_aadhaar_family(query), timeout=20)
+        result = await asyncio.wait_for(
+            _animated_loading(loading_msg, "aadhaar", query, api_client.lookup_aadhaar_family(query)),
+            timeout=20
+        )
     except asyncio.TimeoutError:
-        await loading_msg.edit_text("Request timed out.", parse_mode="HTML")
+        await loading_msg.edit_text("⏰ Request timed out. Try again.", parse_mode="HTML")
         return
     except Exception as e:
         logger.error(f"Aadhaar lookup error: {e}")
-        await loading_msg.edit_text("Lookup failed. Try again.", parse_mode="HTML")
+        await loading_msg.edit_text("❌ Lookup failed. Try again.", parse_mode="HTML")
         return
     try: await loading_msg.delete()
     except Exception: pass
     if not result.get("success"):
-        await loading_msg.edit_text(f"No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ No data for <code>{query}</code>\nError: {result.get('error', 'Unknown')}", parse_mode="HTML")
         return
     await _send_result(update, context, result, "aadhaar_family", query, user)
 

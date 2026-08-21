@@ -315,9 +315,9 @@ def _fmt(key, val):
     v = _fmt_value(val, key)
     if v is None:
         return None
-    emoji = FIELD_EMOJIS.get(key.lower(), "  \u2022")
+    emoji = FIELD_EMOJIS.get(key.lower(), "\u2502")
     label = key.replace("_", " ").replace("-", " ").title()
-    return f"{emoji} <b>{label}:</b> {escape_html(v)}"
+    return f"{emoji} {label}: {v}"
 
 
 def _add(key, val, lines):
@@ -332,18 +332,18 @@ def _walk(data, lines, depth=0):
         if key.lower() in SKIP_KEYS:
             continue
         if isinstance(value, dict):
-            lines.append(f"{sp}\u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+            lines.append(f"{sp}\u2500\u2500 {key.replace('_',' ').upper()}")
             _walk(value, lines, depth + 1)
         elif isinstance(value, list):
             if value:
                 for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
-                        lines.append(f"{sp}\u251C\u2500 <b>#{i}</b>")
+                        lines.append(f"{sp}  \u25B6 Record #{i}")
                         _walk(item, lines, depth + 1)
                     else:
                         l = _fmt("item", item)
                         if l:
-                            lines.append(f"{sp}  {l}")
+                            lines.append(f"{sp}    {l}")
         else:
             l = _fmt(key, value)
             if l:
@@ -363,7 +363,7 @@ def _format_ip(data):
             if not isinstance(source_data, dict):
                 continue
             lines.append(f"")
-            lines.append(f"    \U0001F4C4 <b>{escape_html(source_name)}</b>")
+            lines.append(f"    \u2500\u2500 {escape_html(source_name.upper())} \u2500\u2500")
             for key, val in source_data.items():
                 if key.lower() in SKIP_KEYS:
                     continue
@@ -381,12 +381,12 @@ def _format_numinfo(data):
             continue
         title = source_data.get("title", source_name)
         lines.append(f"")
-        lines.append(f"    \U0001F4C4 <b>{escape_html(title)}</b>")
+        lines.append(f"    \u2500\u2500 {escape_html(title.upper())} \u2500\u2500")
         records = source_data.get("records", [])
         if isinstance(records, list):
             for i, rec in enumerate(records[:5], 1):
                 if isinstance(rec, dict):
-                    lines.append(f"      <b>Record {i}</b>")
+                    lines.append(f"      \u2776 Record #{i}")
                     for k, v in rec.items():
                         _add(k, v, lines)
                 else:
@@ -410,14 +410,14 @@ def _format_name(data):
                 for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
                         lines.append(f"")
-                        lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                        lines.append(f"    \u2500\u2500 RECORD #{i} \u2500\u2500")
                         for k, v in item.items():
                             _add(k, v, lines)
                     else:
                         _add("item", item, lines)
             elif isinstance(value, dict):
                 lines.append(f"")
-                lines.append(f"    \u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+                lines.append(f"    \u2500\u2500 {key.replace('_',' ').upper()} \u2500\u2500")
                 _walk(value, lines, 3)
             else:
                 _add(key, value, lines)
@@ -444,7 +444,7 @@ def _format_hotx(data):
         for i, item in enumerate(inner[:5], 1):
             if isinstance(item, dict):
                 lines.append(f"")
-                lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                lines.append(f"    \u2500\u2500 RECORD #{i} \u2500\u2500")
                 for k, v in item.items():
                     _add(k, v, lines)
             else:
@@ -468,14 +468,14 @@ def _format_aadhaar(data):
                 for i, item in enumerate(value[:10], 1):
                     if isinstance(item, dict):
                         lines.append(f"")
-                        lines.append(f"    \U0001F468\u200D\U0001F469\u200D\U0001F467 <b>Member {i}</b>")
+                        lines.append(f"    \u2500\u2500 MEMBER #{i} \u2500\u2500")
                         for k, v in item.items():
                             _add(k, v, lines)
                     else:
                         _add("item", item, lines)
             elif isinstance(value, dict):
                 lines.append(f"")
-                lines.append(f"    \u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+                lines.append(f"    \u2500\u2500 {key.replace('_',' ').upper()} \u2500\u2500")
                 _walk(value, lines, 3)
             else:
                 _add(key, value, lines)
@@ -491,7 +491,7 @@ def _format_generic(data):
         for i, item in enumerate(api_data[:5], 1):
             if isinstance(item, dict):
                 lines.append(f"")
-                lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                lines.append(f"    \u2500\u2500 RECORD #{i} \u2500\u2500")
                 _walk(item, lines, 3)
             else:
                 _add("item", item, lines)
@@ -518,13 +518,13 @@ def format_text_report(data: dict, service_name: str, query: str) -> str:
 
     lines = []
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
-    lines.append(f"  {emoji}  <b>{BRAND_NAME} OSINT</b>")
+    lines.append(f"  {emoji}  {BRAND_NAME} OSINT")
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     lines.append("")
-    lines.append(f"  {emoji} <b>{title}</b>")
+    lines.append(f"  {emoji}  {title}")
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
-    lines.append(f"  \U0001F3AF <b>Target:</b> {escape_html(query)}")
-    lines.append(f"  \U0001F550 <b>Time:</b> {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
+    lines.append(f"  \U0001F3AF Target: {query}")
+    lines.append(f"  \U0001F550 Time: {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     lines.append("")
 
@@ -537,6 +537,6 @@ def format_text_report(data: dict, service_name: str, query: str) -> str:
 
     lines.append("")
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
-    lines.append(f"  <b>{BRAND_NAME}</b> \u2022 {escape_html(DEVELOPER)}")
+    lines.append(f"  {BRAND_NAME} \u2022 {DEVELOPER}")
     lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     return "\n".join(lines)
