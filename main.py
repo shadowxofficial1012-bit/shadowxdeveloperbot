@@ -75,8 +75,14 @@ async def error_handler(update: object, context) -> None:
             pass
 
 
+def _strip_emojis(text):
+    import re
+    return re.sub(r'[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0000FE00-\U0000FE0F\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF]+', '', text).strip()
+
+
 async def handle_text(update: Update, context):
-    text = update.message.text.strip()
+    raw_text = update.message.text.strip()
+    text = _strip_emojis(raw_text)
 
     if update.effective_user.id in ADMIN_IDS:
         handled = await handle_admin_text(update, context)
