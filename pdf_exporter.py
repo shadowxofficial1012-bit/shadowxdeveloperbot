@@ -298,40 +298,47 @@ def _fmt_value(val, key=""):
     return s
 
 
-def _fmt_field(key, val):
+def _fmt(key, val):
     emoji = FIELD_EMOJIS.get(key.lower(), "  •")
     label = key.replace("_", " ").replace("-", " ").title()
     v = _fmt_value(val, key)
     return f"{emoji} <b>{label}:</b> {escape_html(v)}"
 
 
-def _flatten_record(data: dict, skip_keys=None) -> list:
-    skip_keys = skip_keys or {"success", "status"}
+SKIP_KEYS = {"success", "status", "developer", "response_time_ms", "responsetimems"}
+
+
+def _format_flat(data: dict, indent=2) -> list:
     lines = []
+    sp = "  " * indent
     for key, value in data.items():
-        if key.lower() in skip_keys:
+        if key.lower() in SKIP_KEYS:
             continue
         if isinstance(value, dict):
-            lines.append(f"\n  <b>── {key.replace('_', ' ').upper()} ──</b>")
-            lines.extend(_flatten_record(value, skip_keys))
+            lines.append(f"{sp}┌─ <b>{key.replace('_', ' ').upper()}</b>")
+            lines.extend(_format_flat(value, indent + 1))
         elif isinstance(value, list):
             if value:
                 for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
-                        lines.append(f"\n  <b>Record {i}</b>")
-                        lines.extend(_flatten_record(item, skip_keys))
+                        lines.append(f"{sp}├─ <b>#{i}</b>")
+                        lines.extend(_format_flat(item, indent + 1))
                     else:
-                        lines.append(f"    {_fmt_field('item', item)}")
+                        lines.append(f"{sp}  {_fmt('item', item)}")
                 if len(value) > 5:
-                    lines.append(f"    ... +{len(value)-5} more")
+                    lines.append(f"{sp}  ... +{len(value)-5} more")
         else:
-            lines.append(f"    {_fmt_field(key, value)}")
+            lines.append(f"{sp}{_fmt(key, value)}")
     return lines
 
 
+# ============================================================
+# SERVICE-SPECIFIC FORMATTERS
+# ============================================================
+
 def _format_ip(data):
-    lines = []
     d = data.get("data", data)
+    lines = []
     fields = [
         ("ip", d.get("query") or d.get("ip")),
         ("country", d.get("country")),
@@ -345,29 +352,150 @@ def _format_ip(data):
         ("isp", d.get("isp")),
         ("org", d.get("org")),
         ("as", d.get("as")),
+        ("asname", d.get("asname")),
+        ("mobile", d.get("mobile")),
+        ("proxy", d.get("proxy")),
+        ("hosting", d.get("hosting")),
     ]
     for key, val in fields:
-        if val:
-            lines.append(f"    {_fmt_field(key, val)}")
+        if val is not None and val != "":
+            lines.append(f"    {_fmt(key, val)}")
+    return lines
+
+
+def _format_numinfo(data):
+    d = data.get("data", data)
+    lines = []
+    skip = {"success", "status", "developer", "response_time_ms", "query", "result", "data"}
+    for key, value in d.items():
+        if key.lower() in skip:
+            continue
+        if isinstance(value, list):
+            for i, item in enumerate(value[:5], 1):
+                if isinstance(item, dict):
+                    title = item.get("title") or item.get("source") or f"Source {i}"
+                    lines.append(f"\n    📄 <b>{escape_html(str(title))}</b>")
+                    lines.extend(_format_flat(item, 3))
+                else:
+                    lines.append(f"    {_fmt('item', item)}")
+        elif isinstance(value, dict):
+            lines.extend(_format_flat(value, 2))
+    return lines
+
+
+def _format_name(data):
+    d = data.get("data", data)
+    lines = []
+    if isinstance(d, dict):
+        for key, value in d.items():
+            if key.lower() in SKIP_KEYS:
+                continue
+            if isinstance(value, list):
+                for i, item in enumerate(value[:5], 1):
+                    if isinstance(item, dict):
+                        lines.append(f"\n    📄 <b>Record {i}</b>")
+                        lines.extend(_format_flat(item, 3))
+                    else:
+                        lines.append(f"    {_fmt('item', item)}")
+            elif isinstance(value, dict):
+                lines.extend(_format_flat(value, 2))
+            else:
+                lines.append(f"    {_fmt(key, value)}")
     return lines
 
 
 def _format_vehicle(data):
-    lines = []
     d = data.get("data", data)
+    lines = []
     if isinstance(d, dict):
-        for key, val in d.items():
-            if isinstance(val, (dict, list)):
+        for key, value in d.items():
+            if key.lower() in SKIP_KEYS:
                 continue
-            lines.append(f"    {_fmt_field(key, val)}")
+            if isinstance(value, dict):
+                lines.extend(_format_flat(value, 2))
+            elif isinstance(value, list):
+                for i, item in enumerate(value[:5], 1):
+                    if isinstance(item, dict):
+                        lines.extend(_format_flat(item, 2))
+            else:
+                lines.append(f"    {_fmt(key, value)}")
     return lines
+
+
+def _format_hotx(data):
+    d = data.get("data", data)
+    lines = []
+    if isinstance(d, dict):
+        for key, value in d.items():
+            if key.lower() in SKIP_KEYS:
+                continue
+            if isinstance(value, list):
+                for i, item in enumerate(value[:5], 1):
+                    if isinstance(item, dict):
+                        lines.append(f"\n    📄 <b>Record {i}</b>")
+                        lines.extend(_format_flat(item, 3))
+                    else:
+                        lines.append(f"    {_fmt('item', item)}")
+            elif isinstance(value, dict):
+                lines.extend(_format_flat(value, 2))
+            else:
+                lines.append(f"    {_fmt(key, value)}")
+    return lines
+
+
+def _format_aadhaar(data):
+    d = data.get("data", data)
+    lines = []
+    if isinstance(d, dict):
+        for key, value in d.items():
+            if key.lower() in SKIP_KEYS:
+                continue
+            if isinstance(value, list):
+                for i, item in enumerate(value[:10], 1):
+                    if isinstance(item, dict):
+                        lines.append(f"\n    👨‍👩‍👧 <b>Member {i}</b>")
+                        lines.extend(_format_flat(item, 3))
+                    else:
+                        lines.append(f"    {_fmt('item', item)}")
+            elif isinstance(value, dict):
+                lines.extend(_format_flat(value, 2))
+            else:
+                lines.append(f"    {_fmt(key, value)}")
+    return lines
+
+
+def _format_generic(data):
+    api_data = data.get("data", data)
+    lines = []
+    if isinstance(api_data, dict):
+        lines.extend(_format_flat(api_data))
+    elif isinstance(api_data, list):
+        for i, item in enumerate(api_data[:5], 1):
+            if isinstance(item, dict):
+                lines.append(f"\n    📄 <b>Record {i}</b>")
+                lines.extend(_format_flat(item, 3))
+            else:
+                lines.append(f"    {_fmt('item', item)}")
+    else:
+        lines.append(f"    {_fmt('result', api_data)}")
+    return lines
+
+
+FORMATTERS = {
+    "ip_info": _format_ip,
+    "num_info": _format_numinfo,
+    "name_info": _format_name,
+    "vehicle_full": _format_vehicle,
+    "vehicle_parivahan": _format_vehicle,
+    "hotx": _format_hotx,
+    "aadhaar_family": _format_aadhaar,
+}
 
 
 def format_text_report(data: dict, service_name: str, query: str) -> str:
     from datetime import datetime
     emoji = SERVICE_EMOJIS.get(service_name, "🔍")
     title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
-    api_data = data.get("data", data)
 
     lines = []
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -381,21 +509,8 @@ def format_text_report(data: dict, service_name: str, query: str) -> str:
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append("")
 
-    if service_name == "ip_info":
-        lines.extend(_format_ip(data))
-    elif service_name in ("vehicle_full", "vehicle_parivahan"):
-        lines.extend(_format_vehicle(data))
-    elif isinstance(api_data, dict):
-        lines.extend(_flatten_record(api_data))
-    elif isinstance(api_data, list):
-        for i, item in enumerate(api_data[:5], 1):
-            lines.append(f"  <b>Record {i}</b>")
-            if isinstance(item, dict):
-                lines.extend(_flatten_record(item))
-            else:
-                lines.append(f"    {_fmt_value(item)}")
-    else:
-        lines.append(f"    {_fmt_value(api_data)}")
+    formatter = FORMATTERS.get(service_name, _format_generic)
+    lines.extend(formatter(data))
 
     lines.append("")
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
