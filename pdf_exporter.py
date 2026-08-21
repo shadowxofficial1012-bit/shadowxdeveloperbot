@@ -238,13 +238,13 @@ def generate_service_pdf(data: dict, service_name: str, query: str) -> io.BytesI
 # Text formatters for each service
 
 SERVICE_EMOJIS = {
-    "ip_info": "🌐",
-    "num_info": "📱",
-    "name_info": "👤",
-    "vehicle_full": "🚗",
-    "vehicle_parivahan": "🏛",
-    "hotx": "📞",
-    "aadhaar_family": "👨‍👩‍👧",
+    "ip_info": "\U0001F310",
+    "num_info": "\U0001F4F1",
+    "name_info": "\U0001F464",
+    "vehicle_full": "\U0001F697",
+    "vehicle_parivahan": "\U0001F3DB",
+    "hotx": "\U0001F4DE",
+    "aadhaar_family": "\U0001F468\u200D\U0001F469\u200D\U0001F467",
 }
 
 SERVICE_TITLES = {
@@ -258,78 +258,96 @@ SERVICE_TITLES = {
 }
 
 FIELD_EMOJIS = {
-    "name": "👤", "fullname": "👤", "full_name": "👤", "owner_name": "👤", "owner": "👤",
-    "father_name": "👨", "fathername": "👨",
-    "phone": "📞", "phone2": "📞", "phone3": "📞", "number": "📞", "mobile": "📞",
-    "mobileoperator": "📡", "operator": "📡", "carrier": "📡",
-    "address": "📍", "adres": "📍", "adres2": "📍", "location": "📍",
-    "city": "🏙", "state": "🗺", "region": "🗺", "regionname": "🗺", "indianstate": "🗺",
-    "country": "🌍", "countryname": "🌍", "countrycode": "🌍",
-    "district": "🏘", "village": "🏘",
-    "pincode": "📮", "zip": "📮", "zipcode": "📮",
-    "isp": "📡", "org": "🏢", "organization": "🏢", "as": "📡", "asname": "📡",
-    "latitude": "📍", "lat": "📍", "longitude": "📍", "lon": "📍",
-    "timezone": "🕐",
-    "registration_number": "🔢", "registrationno": "🔢",
-    "vehicle_class": "🚘", "vehicleclass": "🚘",
-    "fuel_type": "⛽", "fueltype": "⛽",
-    "maker_model": "🚘", "makemodel": "🚘",
-    "insurance_upto": "🛡", "insuranceupto": "🛡",
-    "fitness_upto": "✅", "fitnessupto": "✅",
-    "tax_upto": "💰", "taxupto": "💰",
-    "pucc_upto": "📋", "puccupto": "📋",
-    "rc_status": "📋", "rcstatus": "📋",
-    "engine_number": "⚙", "engineno": "⚙", "enginnumber": "⚙",
-    "chassis_number": "⚙", "chassisno": "⚙",
-    "engine_cc": "⚙", "enginecc": "⚙",
-    "color": "🎨", "colour": "🎨",
-    "status": "📊", "title": "📄", "source": "📄",
-    "query": "🔍", "developer": "💻",
-    "response_time_ms": "⏱", "responsetimems": "⏱",
+    "name": "\U0001F464", "fullname": "\U0001F464", "full_name": "\U0001F464", "owner_name": "\U0001F464", "owner": "\U0001F464",
+    "father_name": "\U0001F468", "fathername": "\U0001F468",
+    "phone": "\U0001F4DE", "phone2": "\U0001F4DE", "phone3": "\U0001F4DE", "number": "\U0001F4DE", "mobile": "\U0001F4DE",
+    "mobileoperator": "\U0001F4E1", "operator": "\U0001F4E1", "carrier": "\U0001F4E1",
+    "address": "\U0001F4CD", "adres": "\U0001F4CD", "adres2": "\U0001F4CD", "location": "\U0001F4CD",
+    "city": "\U0001F3D9", "state": "\U0001F5FA", "region": "\U0001F5FA", "regionname": "\U0001F5FA", "indianstate": "\U0001F5FA",
+    "country": "\U0001F30D", "countryname": "\U0001F30D", "countrycode": "\U0001F30D",
+    "district": "\U0001F3D8", "village": "\U0001F3D8",
+    "pincode": "\U0001F4EE", "zip": "\U0001F4EE", "zipcode": "\U0001F4EE",
+    "isp": "\U0001F4E1", "org": "\U0001F3E2", "organization": "\U0001F3E2", "as": "\U0001F4E1", "asname": "\U0001F4E1",
+    "latitude": "\U0001F4CD", "lat": "\U0001F4CD", "longitude": "\U0001F4CD", "lon": "\U0001F4CD",
+    "timezone": "\U0001F550",
+    "registration_number": "\U0001F522", "registrationno": "\U0001F522",
+    "vehicle_class": "\U0001F698", "vehicleclass": "\U0001F698",
+    "fuel_type": "\u26FD", "fueltype": "\u26FD",
+    "maker_model": "\U0001F698", "makemodel": "\U0001F698",
+    "insurance_upto": "\U0001F6E1", "insuranceupto": "\U0001F6E1",
+    "fitness_upto": "\u2705", "fitnessupto": "\u2705",
+    "tax_upto": "\U0001F4B0", "taxupto": "\U0001F4B0",
+    "pucc_upto": "\U0001F4CB", "puccupto": "\U0001F4CB",
+    "rc_status": "\U0001F4CB", "rcstatus": "\U0001F4CB",
+    "engine_number": "\u2699", "engineno": "\u2699", "enginnumber": "\u2699",
+    "chassis_number": "\u2699", "chassisno": "\u2699",
+    "engine_cc": "\u2699", "enginecc": "\u2699",
+    "color": "\U0001F3A8", "colour": "\U0001F3A8",
+    "status": "\U0001F4CA", "title": "\U0001F4C4", "source": "\U0001F4C4",
+    "query": "\U0001F50D", "developer": "\U0001F4BB",
+    "response_time_ms": "\u23F1", "responsetimems": "\u23F1",
+    "continent": "\U0001F30D", "continentcode": "\U0001F30D",
+    "hostname": "\U0001F310", "loc": "\U0001F4CD",
+    "rto": "\U0001F3DB", "rtodata": "\U0001F3DB", "rtoid": "\U0001F3DB", "rtocode": "\U0001F3DB",
+    "regno": "\U0001F522", "regauthority": "\U0001F3DB",
+    "regdate": "\U0001F4C5", "manufacturermonthyear": "\U0001F4C5", "manufactureryear": "\U0001F4C5",
+    "vehicleage": "\U0001F4C5",
+    "chassis": "\u2699", "engine": "\u2699",
+    "puccnumber": "\U0001F4CB", "puccvalidupto": "\U0001F4CB",
+    "insuranvalidupto": "\U0001F6E1",
+    "taxvalidupto": "\U0001F4B0",
+    "fitnessvalidupto": "\u2705",
 }
-
-
-def _fmt_value(val, key=""):
-    if val is None or val == "":
-        return "—"
-    s = str(val).strip()
-    if not s or s.lower() in ("none", "null", "n/a"):
-        return "—"
-    return s
-
-
-def _fmt(key, val):
-    emoji = FIELD_EMOJIS.get(key.lower(), "  •")
-    label = key.replace("_", " ").replace("-", " ").title()
-    v = _fmt_value(val, key)
-    return f"{emoji} <b>{label}:</b> {escape_html(v)}"
-
 
 SKIP_KEYS = {"success", "status", "developer", "response_time_ms", "responsetimems"}
 
 
-def _format_flat(data: dict, indent=2) -> list:
-    lines = []
-    sp = "  " * indent
+def _fmt_value(val, key=""):
+    if val is None or val == "":
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("none", "null", "n/a", ""):
+        return None
+    return s
+
+
+def _fmt(key, val):
+    v = _fmt_value(val, key)
+    if v is None:
+        return None
+    emoji = FIELD_EMOJIS.get(key.lower(), "  \u2022")
+    label = key.replace("_", " ").replace("-", " ").title()
+    return f"{emoji} <b>{label}:</b> {escape_html(v)}"
+
+
+def _add(key, val, lines):
+    line = _fmt(key, val)
+    if line:
+        lines.append(f"    {line}")
+
+
+def _walk(data, lines, depth=0):
+    sp = "  " * depth
     for key, value in data.items():
         if key.lower() in SKIP_KEYS:
             continue
         if isinstance(value, dict):
-            lines.append(f"{sp}┌─ <b>{key.replace('_', ' ').upper()}</b>")
-            lines.extend(_format_flat(value, indent + 1))
+            lines.append(f"{sp}\u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+            _walk(value, lines, depth + 1)
         elif isinstance(value, list):
             if value:
                 for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
-                        lines.append(f"{sp}├─ <b>#{i}</b>")
-                        lines.extend(_format_flat(item, indent + 1))
+                        lines.append(f"{sp}\u251C\u2500 <b>#{i}</b>")
+                        _walk(item, lines, depth + 1)
                     else:
-                        lines.append(f"{sp}  {_fmt('item', item)}")
-                if len(value) > 5:
-                    lines.append(f"{sp}  ... +{len(value)-5} more")
+                        l = _fmt("item", item)
+                        if l:
+                            lines.append(f"{sp}  {l}")
         else:
-            lines.append(f"{sp}{_fmt(key, value)}")
-    return lines
+            l = _fmt(key, value)
+            if l:
+                lines.append(f"{sp}{l}")
 
 
 # ============================================================
@@ -339,47 +357,45 @@ def _format_flat(data: dict, indent=2) -> list:
 def _format_ip(data):
     d = data.get("data", data)
     lines = []
-    fields = [
-        ("ip", d.get("query") or d.get("ip")),
-        ("country", d.get("country")),
-        ("countryCode", d.get("countryCode")),
-        ("region", d.get("regionName")),
-        ("city", d.get("city")),
-        ("zip", d.get("zip")),
-        ("latitude", d.get("lat")),
-        ("longitude", d.get("lon")),
-        ("timezone", d.get("timezone")),
-        ("isp", d.get("isp")),
-        ("org", d.get("org")),
-        ("as", d.get("as")),
-        ("asname", d.get("asname")),
-        ("mobile", d.get("mobile")),
-        ("proxy", d.get("proxy")),
-        ("hosting", d.get("hosting")),
-    ]
-    for key, val in fields:
-        if val is not None and val != "":
-            lines.append(f"    {_fmt(key, val)}")
+    sources = d.get("data", d) if isinstance(d.get("data"), dict) else d
+    if isinstance(sources, dict):
+        for source_name, source_data in sources.items():
+            if not isinstance(source_data, dict):
+                continue
+            lines.append(f"")
+            lines.append(f"    \U0001F4C4 <b>{escape_html(source_name)}</b>")
+            for key, val in source_data.items():
+                if key.lower() in SKIP_KEYS:
+                    continue
+                _add(key, val, lines)
     return lines
 
 
 def _format_numinfo(data):
     d = data.get("data", data)
+    result = d.get("result", d) if isinstance(d.get("result"), dict) else d
+    inner = result.get("data", result) if isinstance(result.get("data"), dict) else result
     lines = []
-    skip = {"success", "status", "developer", "response_time_ms", "query", "result", "data"}
-    for key, value in d.items():
-        if key.lower() in skip:
+    for source_name, source_data in inner.items():
+        if not isinstance(source_data, dict):
             continue
-        if isinstance(value, list):
-            for i, item in enumerate(value[:5], 1):
-                if isinstance(item, dict):
-                    title = item.get("title") or item.get("source") or f"Source {i}"
-                    lines.append(f"\n    📄 <b>{escape_html(str(title))}</b>")
-                    lines.extend(_format_flat(item, 3))
+        title = source_data.get("title", source_name)
+        lines.append(f"")
+        lines.append(f"    \U0001F4C4 <b>{escape_html(title)}</b>")
+        records = source_data.get("records", [])
+        if isinstance(records, list):
+            for i, rec in enumerate(records[:5], 1):
+                if isinstance(rec, dict):
+                    lines.append(f"      <b>Record {i}</b>")
+                    for k, v in rec.items():
+                        _add(k, v, lines)
                 else:
-                    lines.append(f"    {_fmt('item', item)}")
-        elif isinstance(value, dict):
-            lines.extend(_format_flat(value, 2))
+                    _add("item", rec, lines)
+        elif isinstance(source_data, dict):
+            for k, v in source_data.items():
+                if k.lower() in ("title",):
+                    continue
+                _add(k, v, lines)
     return lines
 
 
@@ -393,53 +409,51 @@ def _format_name(data):
             if isinstance(value, list):
                 for i, item in enumerate(value[:5], 1):
                     if isinstance(item, dict):
-                        lines.append(f"\n    📄 <b>Record {i}</b>")
-                        lines.extend(_format_flat(item, 3))
+                        lines.append(f"")
+                        lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                        for k, v in item.items():
+                            _add(k, v, lines)
                     else:
-                        lines.append(f"    {_fmt('item', item)}")
+                        _add("item", item, lines)
             elif isinstance(value, dict):
-                lines.extend(_format_flat(value, 2))
+                lines.append(f"")
+                lines.append(f"    \u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+                _walk(value, lines, 3)
             else:
-                lines.append(f"    {_fmt(key, value)}")
+                _add(key, value, lines)
     return lines
 
 
 def _format_vehicle(data):
     d = data.get("data", data)
+    resp = d.get("response", d) if isinstance(d.get("response"), dict) else d
     lines = []
-    if isinstance(d, dict):
-        for key, value in d.items():
-            if key.lower() in SKIP_KEYS:
-                continue
-            if isinstance(value, dict):
-                lines.extend(_format_flat(value, 2))
-            elif isinstance(value, list):
-                for i, item in enumerate(value[:5], 1):
-                    if isinstance(item, dict):
-                        lines.extend(_format_flat(item, 2))
-            else:
-                lines.append(f"    {_fmt(key, value)}")
+    if isinstance(resp, dict):
+        for key, val in resp.items():
+            _add(key, val, lines)
     return lines
 
 
 def _format_hotx(data):
     d = data.get("data", data)
+    result = d.get("result", d) if isinstance(d.get("result"), dict) else d
+    resp = result.get("response", result) if isinstance(result.get("response"), dict) else result
+    inner = resp.get("data", resp) if isinstance(resp.get("data"), (dict, list)) else resp
     lines = []
-    if isinstance(d, dict):
-        for key, value in d.items():
-            if key.lower() in SKIP_KEYS:
-                continue
-            if isinstance(value, list):
-                for i, item in enumerate(value[:5], 1):
-                    if isinstance(item, dict):
-                        lines.append(f"\n    📄 <b>Record {i}</b>")
-                        lines.extend(_format_flat(item, 3))
-                    else:
-                        lines.append(f"    {_fmt('item', item)}")
-            elif isinstance(value, dict):
-                lines.extend(_format_flat(value, 2))
+    if isinstance(inner, list):
+        for i, item in enumerate(inner[:5], 1):
+            if isinstance(item, dict):
+                lines.append(f"")
+                lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                for k, v in item.items():
+                    _add(k, v, lines)
             else:
-                lines.append(f"    {_fmt(key, value)}")
+                _add("item", item, lines)
+    elif isinstance(inner, dict):
+        for k, v in inner.items():
+            if k.lower() in SKIP_KEYS:
+                continue
+            _add(k, v, lines)
     return lines
 
 
@@ -453,14 +467,18 @@ def _format_aadhaar(data):
             if isinstance(value, list):
                 for i, item in enumerate(value[:10], 1):
                     if isinstance(item, dict):
-                        lines.append(f"\n    👨‍👩‍👧 <b>Member {i}</b>")
-                        lines.extend(_format_flat(item, 3))
+                        lines.append(f"")
+                        lines.append(f"    \U0001F468\u200D\U0001F469\u200D\U0001F467 <b>Member {i}</b>")
+                        for k, v in item.items():
+                            _add(k, v, lines)
                     else:
-                        lines.append(f"    {_fmt('item', item)}")
+                        _add("item", item, lines)
             elif isinstance(value, dict):
-                lines.extend(_format_flat(value, 2))
+                lines.append(f"")
+                lines.append(f"    \u250C\u2500 <b>{key.replace('_',' ').upper()}</b>")
+                _walk(value, lines, 3)
             else:
-                lines.append(f"    {_fmt(key, value)}")
+                _add(key, value, lines)
     return lines
 
 
@@ -468,16 +486,17 @@ def _format_generic(data):
     api_data = data.get("data", data)
     lines = []
     if isinstance(api_data, dict):
-        lines.extend(_format_flat(api_data))
+        _walk(api_data, lines, 2)
     elif isinstance(api_data, list):
         for i, item in enumerate(api_data[:5], 1):
             if isinstance(item, dict):
-                lines.append(f"\n    📄 <b>Record {i}</b>")
-                lines.extend(_format_flat(item, 3))
+                lines.append(f"")
+                lines.append(f"    \U0001F4C4 <b>Record {i}</b>")
+                _walk(item, lines, 3)
             else:
-                lines.append(f"    {_fmt('item', item)}")
+                _add("item", item, lines)
     else:
-        lines.append(f"    {_fmt('result', api_data)}")
+        _add("result", api_data, lines)
     return lines
 
 
@@ -494,26 +513,30 @@ FORMATTERS = {
 
 def format_text_report(data: dict, service_name: str, query: str) -> str:
     from datetime import datetime
-    emoji = SERVICE_EMOJIS.get(service_name, "🔍")
+    emoji = SERVICE_EMOJIS.get(service_name, "\U0001F50D")
     title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
 
     lines = []
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     lines.append(f"  {emoji}  <b>{BRAND_NAME} OSINT</b>")
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     lines.append("")
     lines.append(f"  {emoji} <b>{title}</b>")
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"  🎯 <b>Target:</b> {escape_html(query)}")
-    lines.append(f"  🕐 <b>Time:</b> {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
+    lines.append(f"  \U0001F3AF <b>Target:</b> {escape_html(query)}")
+    lines.append(f"  \U0001F550 <b>Time:</b> {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     lines.append("")
 
     formatter = FORMATTERS.get(service_name, _format_generic)
-    lines.extend(formatter(data))
+    result_lines = formatter(data)
+    if result_lines:
+        lines.extend(result_lines)
+    else:
+        lines.append("    No data found.")
 
     lines.append("")
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"  <b>{BRAND_NAME}</b> • {escape_html(DEVELOPER)}")
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
+    lines.append(f"  <b>{BRAND_NAME}</b> \u2022 {escape_html(DEVELOPER)}")
+    lines.append(f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
     return "\n".join(lines)
