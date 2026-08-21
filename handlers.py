@@ -105,6 +105,10 @@ async def _animated_loading(message, service_key, query, api_coro):
     return result[0]
 
 
+def _is_admin(user_id):
+    return user_id in ADMIN_IDS
+
+
 def _check_rate_limit(user_id):
     now = time.time()
     _rate_limit_tracker[user_id] = [ts for ts in _rate_limit_tracker[user_id] if now - ts < RATE_LIMIT_WINDOW]
@@ -154,13 +158,13 @@ async def _pre_lookup_checks(update, context):
     if not is_admin and not db.has_active_subscription(user.id):
         await update.message.reply_text(
             "No Active Subscription!\nBuy a package for unlimited lookups!",
-            reply_markup=main_menu_keyboard(), parse_mode="HTML")
+            reply_markup=main_menu_keyboard(is_admin=_is_admin(update.effective_user.id)), parse_mode="HTML")
         return (False, None)
     allowed, wait_secs = _check_rate_limit(user.id)
     if not allowed:
         await update.message.reply_text(
             f"Rate Limit! Wait {wait_secs}s.",
-            reply_markup=main_menu_keyboard(), parse_mode="HTML")
+            reply_markup=main_menu_keyboard(is_admin=_is_admin(update.effective_user.id)), parse_mode="HTML")
         return (False, None)
     return (True, user)
 
@@ -230,7 +234,7 @@ async def start(update, context):
     if is_admin_user:
         welcome += "Admin: Tap Admin Panel below\n\n"
     welcome += "Choose a service below:"
-    await update.message.reply_text(welcome, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await update.message.reply_text(welcome, reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
 
 
 async def help_command(update, context):
@@ -252,7 +256,7 @@ async def help_command(update, context):
         "  HotX Lookup - Deep phone lookup\n"
         "  Aadhaar Family - Family trace\n\n"
         f"Developed by {DEVELOPER}")
-    await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await update.message.reply_text(text, reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
 
 
 async def status_command(update, context):
@@ -267,7 +271,7 @@ async def status_command(update, context):
         else: lines.append(f"[ERR] {n} - {d}")
     ok_count = sum(1 for r in results if r["status"] == "ok")
     lines.append(f"\n{ok_count}/{len(results)} endpoints healthy")
-    await loading_msg.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=main_menu_keyboard())
+    await loading_msg.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=main_menu_keyboard(user_id=update.effective_user.id))
 
 
 async def handle_ip_lookup(update, context):
@@ -275,7 +279,7 @@ async def handle_ip_lookup(update, context):
     if not ok: return
     query = update.message.text.strip()
     if not query or len(query) < 3:
-        await update.message.reply_text("Enter a valid IP.\nExample: 8.8.8.8", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid IP.\nExample: 8.8.8.8", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -303,7 +307,7 @@ async def handle_numinfo_lookup(update, context):
     if not ok: return
     query = update.message.text.strip().replace(" ", "").replace("-", "").replace("+", "")
     if not query or not query.isdigit() or len(query) < 10:
-        await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -331,7 +335,7 @@ async def handle_name_lookup(update, context):
     if not ok: return
     query = update.message.text.strip()
     if not query or len(query) < 2:
-        await update.message.reply_text("Enter a name.\nExample: Rahul Kumar", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a name.\nExample: Rahul Kumar", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -359,7 +363,7 @@ async def handle_vehicle_full_lookup(update, context):
     if not ok: return
     query = update.message.text.strip().upper()
     if not query or len(query) < 5:
-        await update.message.reply_text("Enter a valid vehicle number.\nExample: UK06BL1506", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid vehicle number.\nExample: UK06BL1506", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -387,7 +391,7 @@ async def handle_parivahan_lookup(update, context):
     if not ok: return
     query = update.message.text.strip().upper()
     if not query or len(query) < 5:
-        await update.message.reply_text("Enter a valid vehicle number.\nExample: MP09BH4640", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid vehicle number.\nExample: MP09BH4640", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -415,7 +419,7 @@ async def handle_hotx_lookup(update, context):
     if not ok: return
     query = update.message.text.strip().replace(" ", "").replace("-", "").replace("+", "")
     if not query or not query.isdigit() or len(query) < 10:
-        await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid 10-digit number.\nExample: 9876543210", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -443,7 +447,7 @@ async def handle_aadhaar_lookup(update, context):
     if not ok: return
     query = update.message.text.strip().replace(" ", "")
     if not query or not query.isdigit() or len(query) < 12:
-        await update.message.reply_text("Enter a valid 12-digit Aadhaar.\nExample: 123456789012", reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        await update.message.reply_text("Enter a valid 12-digit Aadhaar.\nExample: 123456789012", reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
         return
     loading_msg = await update.message.reply_text("⚡", parse_mode="HTML")
     try:
@@ -477,7 +481,7 @@ async def buy_plan(update, context):
 
 async def handle_redeem_code(update, context):
     text = "Redeem Code\n\nEnter your code:\nExample: <code>ABC123XYZ9</code>"
-    await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await update.message.reply_text(text, reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
     context.user_data["awaiting_redeem_code"] = True
 
 
@@ -485,7 +489,7 @@ async def process_redeem_code(update, context):
     code = update.message.text.strip()
     user = update.effective_user
     success, message, hours = db.redeem_code(code, user.id)
-    await update.message.reply_text(message, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await update.message.reply_text(message, reply_markup=main_menu_keyboard(user_id=update.effective_user.id), parse_mode="HTML")
 
 
 async def contact_admin(update, context):
@@ -718,7 +722,7 @@ async def handle_screenshot(update, context):
     context.user_data.pop("pending_package", None)
     await update.message.reply_text(
         f"Payment Screenshot Received!\nPackage: {pkg['label']}\nAmount: Rs.{pkg['price']}\nTX: #{tx_id}\n\nAwaiting admin verification.",
-        reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        reply_markup=main_menu_keyboard(is_admin=_is_admin(update.effective_user.id)), parse_mode="HTML")
     from keyboards import admin_approve_keyboard
     for admin_id in ADMIN_IDS:
         try:
@@ -745,7 +749,7 @@ async def handle_qr_screenshot(update, context):
     if qr_record and qr_record["is_used"]:
         await update.message.reply_text(
             "This QR code has already been used. A new QR will be generated.",
-            reply_markup=main_menu_keyboard(), parse_mode="HTML")
+            reply_markup=main_menu_keyboard(is_admin=_is_admin(update.effective_user.id)), parse_mode="HTML")
         context.user_data.pop("awaiting_qr_screenshot", None)
         context.user_data.pop("pending_qr_token", None)
         context.user_data.pop("pending_package", None)
@@ -764,7 +768,7 @@ async def handle_qr_screenshot(update, context):
         f"TX: #{tx_id}\n"
         f"QR Token: {token[:8]}...\n\n"
         f"Awaiting admin verification.",
-        reply_markup=main_menu_keyboard(), parse_mode="HTML")
+        reply_markup=main_menu_keyboard(is_admin=_is_admin(update.effective_user.id)), parse_mode="HTML")
     from keyboards import admin_approve_keyboard
     for admin_id in ADMIN_IDS:
         try:

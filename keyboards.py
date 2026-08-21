@@ -7,14 +7,16 @@ from telegram import (
 from config import SUBSCRIPTION_PACKAGES, REQUIRED_CHANNELS
 
 
-def main_menu_keyboard():
+def main_menu_keyboard(user_id=None):
     keyboard = [
-        [KeyboardButton("🌐 IP Lookup"), KeyboardButton("📱 Num Info"), KeyboardButton("📖 Name Info")],
-        [KeyboardButton("🚗 Vehicle Lookup"), KeyboardButton("🔍 M-Parivahan")],
-        [KeyboardButton("📞 HotX Lookup"), KeyboardButton("👨‍👩‍👧 Aadhaar Family")],
-        [KeyboardButton("💰 Buy Plan"), KeyboardButton("❓ Help"), KeyboardButton("🎁 Redeem Code")],
-        [KeyboardButton("🤳 Contact Admin"), KeyboardButton("🔧 Admin Panel")],
+        [KeyboardButton("📱 Num Info"), KeyboardButton("🚗 Vehicle Lookup"), KeyboardButton("👨‍👩‍👧 Aadhaar Family")],
+        [KeyboardButton("🌐 IP Lookup"), KeyboardButton("📖 Name Info"), KeyboardButton("🔍 M-Parivahan"), KeyboardButton("📞 HotX Lookup")],
+        [KeyboardButton("💰 Buy Plan"), KeyboardButton("🤳 Contact Admin")],
+        [KeyboardButton("❓ Help"), KeyboardButton("🎁 Redeem Code")],
     ]
+    from config import ADMIN_IDS
+    if user_id and user_id in ADMIN_IDS:
+        keyboard.append([KeyboardButton("🔧 Admin Panel")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
