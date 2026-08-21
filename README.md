@@ -1,6 +1,6 @@
 # HathixShadow OSINT Bot
 
-A multi-service Telegram OSINT bot by @shadowxdeveloper with QR-based payments, 7 API lookup services, and dark-themed PDF reports.
+A multi-service Telegram OSINT bot by Utkarsh with QR-based payments, 7 API lookup services, and dark-themed PDF reports.
 
 ## Features
 
