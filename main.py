@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -322,6 +323,9 @@ def main():
     if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         print("Error: Set your BOT_TOKEN in .env file!")
         return
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     db.init_db()
     print("Database initialized")

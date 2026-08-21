@@ -87,8 +87,10 @@ async def _pre_lookup_checks(update, context):
 
 
 async def _send_result(update, context, data, service_name, query, user):
-    from pdf_exporter import format_text_report
+    from pdf_exporter import format_text_report, SERVICE_EMOJIS, SERVICE_TITLES
     text = format_text_report(data, service_name, query)
+    emoji = SERVICE_EMOJIS.get(service_name, "🔍")
+    title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
     escaped = escape_html(text)
     code_block = f"<pre>{escaped}</pre>"
     if len(code_block) + 50 > MAX_MSG_LEN:
@@ -108,12 +110,12 @@ async def _send_result(update, context, data, service_name, query, user):
     except Exception:
         pass
     try:
-        db.log_lookup(user.id, query, True)
-        db.save_lookup_result(user.id, query, json.dumps(data))
+        db.log_lookup(user.id, user.username or user.first_name, True)
+        db.save_lookup_result(user.id, user.username or user.first_name, json.dumps(data))
     except Exception:
         pass
     await update.message.reply_text(
-        f"Lookup Complete for <code>{query}</code>",
+        f"{emoji} <b>{title}</b> complete for <code>{escape_html(query)}</code>",
         reply_markup=pdf_button(service_name, query), parse_mode="HTML")
 
 

@@ -231,64 +231,160 @@ def generate_service_pdf(data: dict, service_name: str, query: str) -> io.BytesI
 
 # Text formatters for each service
 
-def _fmt_dict_lines(data: dict, indent: int = 0, skip_keys=None) -> list:
+SERVICE_EMOJIS = {
+    "ip_info": "🌐",
+    "num_info": "📱",
+    "name_info": "👤",
+    "vehicle_full": "🚗",
+    "vehicle_parivahan": "🏛",
+    "hotx": "📞",
+    "aadhaar_family": "👨‍👩‍👧",
+}
+
+SERVICE_TITLES = {
+    "ip_info": "IP ADDRESS INTEL",
+    "num_info": "PHONE NUMBER INTEL",
+    "name_info": "IDENTITY INTEL",
+    "vehicle_full": "VEHICLE REGISTRY",
+    "vehicle_parivahan": "M-PARIVAHAN REPORT",
+    "hotx": "DEEP PHONE INTEL",
+    "aadhaar_family": "AADHAAR FAMILY TRACE",
+}
+
+FIELD_LABELS = {
+    "ip": "IP Address",
+    "country": "Country",
+    "countryCode": "Country Code",
+    "region": "Region",
+    "regionName": "Region Name",
+    "city": "City",
+    "zip": "ZIP Code",
+    "lat": "Latitude",
+    "lon": "Longitude",
+    "timezone": "Timezone",
+    "isp": "ISP",
+    "org": "Organization",
+    "as": "AS Number",
+    "asname": "AS Name",
+    "mobile": "Mobile",
+    "proxy": "Proxy",
+    "hosting": "Hosting",
+    "query": "Query",
+    "number": "Number",
+    "name": "Name",
+    "operator": "Operator",
+    "state": "State",
+    "country_name": "Country",
+    "carrier": "Carrier",
+    "type": "Type",
+    "owner_name": "Owner Name",
+    "father_name": "Father Name",
+    "address": "Address",
+    "village": "Village",
+    "district": "District",
+    "registration_number": "Registration No",
+    "owner": "Owner",
+    "father_name": "Father Name",
+    "vehicle_class": "Vehicle Class",
+    "fuel_type": "Fuel Type",
+    "maker_model": "Maker Model",
+    "insurance_upto": "Insurance Upto",
+    "fitness_upto": "Fitness Upto",
+    "tax_upto": "Tax Upto",
+    "pucc_upto": "PUC Upto",
+    "rc_status": "RC Status",
+    "engine_number": "Engine No",
+    "chassis_number": "Chassis No",
+    "engine_cc": "Engine CC",
+    "seating_capacity": "Seating",
+    "standing_capacity": "Standing",
+    "wheel_base": "Wheel Base",
+    "unladen_weight": "Unladen Weight",
+    "gross_weight": "Gross Weight",
+    "color": "Color",
+    "norms_type": "Norms Type",
+    "status": "Status",
+    "data": "Data",
+    "success": "Success",
+}
+
+
+def _fmt_value(val, key=""):
+    if val is None or val == "":
+        return "—"
+    s = str(val).strip()
+    if not s:
+        return "—"
+    if key in ("mobile", "proxy", "hosting"):
+        return "Yes" if s.lower() in ("true", "1", "yes") else "No"
+    return s
+
+
+def _fmt_field(key, val, indent=1):
+    label = FIELD_LABELS.get(key, key.replace("_", " ").title())
+    v = _fmt_value(val, key)
+    return f"{'  ' * indent}  {label}: {v}"
+
+
+def _fmt_dict_lines(data: dict, indent: int = 1, skip_keys=None) -> list:
     lines = []
-    skip_keys = skip_keys or set()
-    prefix = "  " * indent
+    skip_keys = skip_keys or {"success", "status"}
     for key, value in data.items():
         if key in skip_keys:
             continue
-        label = key.replace("_", " ").title()
         if isinstance(value, dict):
-            lines.append(f"{prefix}┌─ {label}")
+            lines.append(f"{'  ' * indent}┌─ {key.replace('_', ' ').upper()}")
             lines.extend(_fmt_dict_lines(value, indent + 1, skip_keys))
         elif isinstance(value, list):
             if value:
-                lines.append(f"{prefix}┌─ {label} ({len(value)} items)")
-                for i, item in enumerate(value[:10], 1):
+                lines.append(f"{'  ' * indent}┌─ {key.replace('_', ' ').upper()} ({len(value)})")
+                for i, item in enumerate(value[:8], 1):
                     if isinstance(item, dict):
-                        lines.append(f"{prefix}  >> Record #{i}")
+                        lines.append(f"{'  ' * (indent+1)}── Record {i} ──")
                         lines.extend(_fmt_dict_lines(item, indent + 2, skip_keys))
                     else:
-                        lines.append(f"{prefix}  {i}. {safe_str(item)}")
+                        lines.append(f"{'  ' * (indent+1)}  {i}. {_fmt_value(item)}")
+                if len(value) > 8:
+                    lines.append(f"{'  ' * (indent+1)}  ... +{len(value)-8} more")
         else:
-            lines.append(f"{prefix}  {label}: {safe_str(value)}")
+            lines.append(_fmt_field(key, value, indent))
     return lines
 
 
 def format_text_report(data: dict, service_name: str, query: str) -> str:
-    title_map = {
-        "ip_info": "IP Lookup Result",
-        "num_info": "Number Info Result",
-        "name_info": "Name Info Result",
-        "vehicle_full": "Vehicle Info Result",
-        "vehicle_parivahan": "M-Parivahan Result",
-        "hotx": "HotX Lookup Result",
-        "aadhaar_family": "Aadhaar Family Result",
-    }
-
-    title = title_map.get(service_name, "OSINT Result")
+    emoji = SERVICE_EMOJIS.get(service_name, "🔍")
+    title = SERVICE_TITLES.get(service_name, "OSINT REPORT")
     api_data = data.get("data", data)
 
+    box_w = 42
     lines = []
-    lines.append(f"{'=' * 50}")
-    lines.append(f"  {title.upper()}")
-    lines.append(f"{'=' * 50}")
+
+    lines.append(f"{'━' * box_w}")
+    lines.append(f"  {emoji}  {BRAND_NAME} OSINT")
+    lines.append(f"{'━' * box_w}")
+    lines.append("")
+    lines.append(f"  {title}")
+    lines.append(f"{'─' * box_w}")
     lines.append(f"  Target: {query}")
-    lines.append(f"{'─' * 50}")
+    from datetime import datetime
+    lines.append(f"  Time:   {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
+    lines.append(f"{'─' * box_w}")
+    lines.append("")
 
     if isinstance(api_data, dict):
         lines.extend(_fmt_dict_lines(api_data))
     elif isinstance(api_data, list):
-        for i, item in enumerate(api_data[:20], 1):
-            lines.append(f"  >> Record #{i}")
+        for i, item in enumerate(api_data[:10], 1):
+            lines.append(f"  ── Record {i} {'─' * 20}")
             if isinstance(item, dict):
                 lines.extend(_fmt_dict_lines(item, 1))
             else:
-                lines.append(f"    {safe_str(item)}")
+                lines.append(f"    {_fmt_value(item)}")
     else:
-        lines.append(f"  {safe_str(api_data)}")
+        lines.append(f"  {_fmt_value(api_data)}")
 
-    lines.append(f"{'═' * 50}")
-    lines.append(f"  {BRAND_NAME} | {DEVELOPER}")
+    lines.append("")
+    lines.append(f"{'━' * box_w}")
+    lines.append(f"  {BRAND_NAME} • {DEVELOPER}")
+    lines.append(f"{'━' * box_w}")
     return "\n".join(lines)
