@@ -40,7 +40,7 @@ QR_CODE_PATH = os.getenv("QR_CODE_PATH", "media/qr_code.png")
 BRAND_NAME = "HathixShadow"
 BRAND_TAGLINE = "OSINT Bot"
 LOGO_PATH = os.getenv("LOGO_PATH", "media/logo.png")
-DEVELOPER = "Utkarsh"
+DEVELOPER = "@shadowxdeveloper"
 
 # === NEW API ENDPOINTS ===
 API_IP_INFO = "https://ip-info-api.hcjffjggjf.workers.dev/api/v1/ip"

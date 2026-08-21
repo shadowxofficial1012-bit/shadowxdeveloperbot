@@ -13,7 +13,7 @@ try:
 except ImportError:
     BRAND_NAME = "HathixShadow"
     BRAND_TAGLINE = "OSINT Bot"
-    DEVELOPER = "Utkarsh"
+    DEVELOPER = "@shadowxdeveloper"
 
 # Dark hacker color palette
 DARK_BG = (18, 18, 24)
