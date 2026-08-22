@@ -14,11 +14,10 @@ ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
 UPI_ID = os.getenv("UPI_ID", "yourupi@paytm")
 UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
-# Payment Verification API (optional)
-# POST {"utr": "...", "amount": 100, "upi_id": "..."}
-# Returns: {"verified": true}
-VERIFY_URL = os.getenv("VERIFY_URL", "")
-VERIFY_API_KEY = os.getenv("VERIFY_API_KEY", "")
+# DFPAY Payment Gateway
+DFPAY_API_URL = os.getenv("DFPAY_API_URL", "http://gifteasecards.shop/v1/payment")
+DFPAY_API_KEY = os.getenv("DFPAY_API_KEY", "fpk_live_3dcbd653ab51203876d5b943b91df5e7a1a16afb")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")  # e.g. https://your-app.up.railway.app/webhook/dfpay
 
 # Subscription Packages
 SUBSCRIPTION_PACKAGES = {

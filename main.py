@@ -28,7 +28,6 @@ from handlers import (
     handle_parivahan_lookup,
     handle_hotx_lookup,
     handle_aadhaar_lookup,
-    handle_utr_input,
     status_command,
     check_user_channels,
 )
@@ -87,11 +86,6 @@ async def handle_text(update: Update, context):
         handled = await handle_admin_text(update, context)
         if handled:
             return
-
-    if context.user_data.get("awaiting_utr"):
-        context.user_data.pop("awaiting_utr", None)
-        await handle_utr_input(update, context)
-        return
 
     if context.user_data.get("awaiting_redeem_code"):
         context.user_data.pop("awaiting_redeem_code", None)
@@ -338,6 +332,15 @@ def main():
 
     print("HathixShadow OSINT Bot starting...")
     print(f"Admin IDs: {ADMIN_IDS}")
+
+    # Start DFPAY webhook server
+    from config import WEBHOOK_URL
+    if WEBHOOK_URL:
+        from webhook import start_webhook_server
+        start_webhook_server(app.bot, loop)
+        print(f"DFPAY webhook server started")
+    else:
+        print("DFPAY webhook not configured (WEBHOOK_URL empty)")
 
     if app.job_queue:
         api_client.start_health_monitor(app.job_queue, bot=app.bot)

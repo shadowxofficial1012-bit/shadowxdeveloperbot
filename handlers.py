@@ -58,23 +58,86 @@ SERVICE_BARS = {
 }
 
 
-async def _qr_expiry_job(context):
-    """Called after 30 minutes. If QR was marked paid, activate subscription. Otherwise expire."""
+async def _dfpay_create_order(amount: int, order_ref: str) -> dict:
+    """Create a payment order via DFPAY API."""
+    from config import DFPAY_API_URL, DFPAY_API_KEY, WEBHOOK_URL
+    import httpx
+    payload = {"amount": amount, "order_ref": order_ref}
+    if WEBHOOK_URL:
+        payload["webhook_url"] = WEBHOOK_URL
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{DFPAY_API_URL}/create",
+                json=payload,
+                headers={"X-API-Key": DFPAY_API_KEY, "Content-Type": "application/json"},
+            )
+            return resp.json()
+    except Exception as e:
+        logger.error(f"DFPAY create order error: {e}")
+        return {}
+
+
+async def _dfpay_check_status(order_id: str) -> dict:
+    """Check payment status via DFPAY API."""
+    from config import DFPAY_API_URL, DFPAY_API_KEY
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{DFPAY_API_URL}/status/{order_id}",
+                headers={"X-API-Key": DFPAY_API_KEY},
+            )
+            return resp.json()
+    except Exception as e:
+        logger.error(f"DFPAY status check error: {e}")
+        return {}
+
+
+async def _payment_poll_job(context):
+    """Poll DFPAY payment status every 15 seconds."""
     data = context.job.data
     user_id = data["user_id"]
-    token = data["token"]
+    order_id = data["order_id"]
     package_key = data["package_key"]
     chat_id = data["chat_id"]
-    qr_record = db.get_qr_payment_by_token(token)
-    if qr_record and qr_record["is_used"]:
-        # Payment was confirmed — activate subscription
+    attempts = data.get("attempts", 0)
+    max_attempts = 120  # 30 minutes / 15 sec = 120
+
+    if attempts >= max_attempts:
+        # Timed out
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="⏰ <b>Payment Expired!</b>\n\n"
+                     "Payment was not completed.\n"
+                     "Tap Buy Plan again to try.",
+                reply_markup=main_menu_button(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        context.user_data.pop("pending_dfpay_order", None)
+        context.user_data.pop("pending_package", None)
+        return
+
+    # Check status
+    status_resp = await _dfpay_check_status(order_id)
+    status = status_resp.get("status", "")
+
+    if status in ("paid", "completed", "success", "CAPTURED"):
+        # Payment confirmed — activate subscription
         pkg = SUBSCRIPTION_PACKAGES.get(package_key, {})
         duration_hours = pkg.get("duration_hours", 24)
         db.set_subscription(user_id, duration_hours)
+        tx_id = db.create_transaction(user_id, package_key, duration_hours, pkg.get("price", 0))
+        db.update_transaction_status(tx_id, "approved")
         try:
-            uds.save_payment(user_id, "user", package_key, pkg.get("price", 0), "approved", 0)
+            uds.save_payment(user_id, "user", package_key, pkg.get("price", 0), "approved", tx_id)
         except Exception:
             pass
+        context.user_data.pop("pending_dfpay_order", None)
+        context.user_data.pop("pending_package", None)
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -87,25 +150,29 @@ async def _qr_expiry_job(context):
             )
         except Exception:
             pass
+        # Notify admin
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"💰 Payment Auto-Verified\n"
+                        f"User: #{user_id}\n"
+                        f"Package: {pkg.get('label', package_key)} Rs.{pkg.get('price', 0)}\n"
+                        f"Order: {order_id}\n"
+                        f"✅ Activated immediately"),
+                    parse_mode="HTML")
+            except Exception:
+                pass
     else:
-        # QR expired without payment — notify user
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="⏰ <b>QR Code Expired!</b>\n\n"
-                     "Payment was not confirmed.\n"
-                     "Tap Buy Plan again to generate a new QR.",
-                reply_markup=main_menu_button(),
-                parse_mode="HTML",
+        # Still pending — schedule next poll
+        if context.job_queue:
+            context.job_queue.run_once(
+                _payment_poll_job,
+                when=15,
+                data={**data, "attempts": attempts + 1},
+                name=f"poll_{order_id}",
             )
-        except Exception:
-            pass
-    # Cleanup context user_data
-    try:
-        context.user_data.pop("pending_qr_token", None)
-        context.user_data.pop("pending_package", None)
-    except Exception:
-        pass
 
 
 async def _animated_loading(message, service_key, query, api_coro):
@@ -625,40 +692,55 @@ async def handle_callback(update, context):
             await query_cb.edit_message_text("Invalid.", reply_markup=main_menu_button())
             return
         pkg = SUBSCRIPTION_PACKAGES[package_key]
-        import database as qr_db
-        from qr_payment import generate_qr_with_text
-        qr_buf, token = generate_qr_with_text(package_key, pkg["price"], pkg["label"], UPI_ID)
-        qr_db.create_qr_payment(token, user_id, package_key, pkg["price"], UPI_ID)
-        context.user_data["pending_qr_token"] = token
+        await query_cb.answer("Creating payment...")
+        # Create DFPAY order
+        order_ref = f"{user_id}_{package_key}_{int(time.time())}"
+        order_resp = await _dfpay_create_order(pkg["price"], order_ref)
+        order_id = order_resp.get("order_id") or order_resp.get("id") or order_resp.get("data", {}).get("order_id")
+        payment_url = order_resp.get("payment_url") or order_resp.get("url") or order_resp.get("data", {}).get("payment_url")
+        if not order_id:
+            await query_cb.edit_message_text(
+                "❌ Payment gateway error.\nPlease try again later.",
+                reply_markup=main_menu_button())
+            return
+        context.user_data["pending_dfpay_order"] = order_id
         context.user_data["pending_package"] = package_key
+        # Generate QR from payment URL or UPI
+        from qr_payment import generate_qr_with_text
+        qr_buf, _ = generate_qr_with_text(package_key, pkg["price"], pkg["label"], UPI_ID)
         from datetime import datetime, timedelta
         qr_expiry = (datetime.now() + timedelta(minutes=30)).strftime("%I:%M %p")
         text = (
             f"<b>{pkg['label']}</b>\n"
             f"Price: <b>Rs.{pkg['price']}</b>\n\n"
-            f"Scan the QR below to pay the exact amount.\n"
+            f"Scan the QR below to pay.\n"
             f"UPI ID: <code>{UPI_ID}</code>\n"
             f"Amount: <b>Rs.{pkg['price']} (Exact)</b>\n\n"
             f"⏱️ Expires at: <b>{qr_expiry}</b>\n\n"
-            f"After paying, send the UTR/Transaction ID here.\n"
-            f"Your subscription will activate automatically!")
+            f"Payment will be verified automatically!")
+        if payment_url:
+            buttons = [
+                [InlineKeyboardButton("💳 Pay Now", url=payment_url)],
+                [InlineKeyboardButton("❌ Cancel", callback_data="cancel_payment")],
+            ]
+        else:
+            buttons = [
+                [InlineKeyboardButton("❌ Cancel", callback_data="cancel_payment")],
+            ]
         await context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=qr_buf,
             caption=text,
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ Cancel", callback_data="cancel_payment")],
-            ]),
+            reply_markup=InlineKeyboardMarkup(buttons),
         )
-        context.user_data["awaiting_utr"] = True
-        # Schedule expiry job
+        # Start polling for payment status
         if context.job_queue:
             context.job_queue.run_once(
-                _qr_expiry_job,
-                when=timedelta(minutes=30),
-                data={"user_id": user_id, "token": token, "package_key": package_key, "chat_id": update.effective_chat.id},
-                name=f"qr_{token}",
+                _payment_poll_job,
+                when=15,
+                data={"user_id": user_id, "order_id": order_id, "package_key": package_key, "chat_id": update.effective_chat.id, "attempts": 0},
+                name=f"poll_{order_id}",
             )
         try:
             await query_cb.message.delete()
@@ -697,14 +779,21 @@ async def handle_callback(update, context):
         return
 
     if data == "cancel_payment":
+        pending_order = context.user_data.get("pending_dfpay_order", "")
         pending_token = context.user_data.get("pending_qr_token", "")
         context.user_data.pop("awaiting_screenshot", None)
+        context.user_data.pop("awaiting_utr", None)
         context.user_data.pop("pending_qr_token", None)
+        context.user_data.pop("pending_dfpay_order", None)
         context.user_data.pop("pending_package", None)
-        # Cancel the scheduled expiry job
-        if context.job_queue and pending_token:
-            for job in context.job_queue.get_jobs_by_name(f"qr_{pending_token}"):
-                job.schedule_removal()
+        # Cancel polling and expiry jobs
+        if context.job_queue:
+            if pending_order:
+                for job in context.job_queue.get_jobs_by_name(f"poll_{pending_order}"):
+                    job.schedule_removal()
+            if pending_token:
+                for job in context.job_queue.get_jobs_by_name(f"qr_{pending_token}"):
+                    job.schedule_removal()
         try: await query_cb.edit_message_text("Payment cancelled.", reply_markup=main_menu_button())
         except BadRequest: await query_cb.message.reply_text("Payment cancelled.", reply_markup=main_menu_button())
         return
@@ -824,138 +913,6 @@ async def handle_screenshot(update, context):
 
 
 
-async def handle_utr_input(update, context):
-    """Handle UTR/transaction ID sent by user after QR payment."""
-    user = update.effective_user
-    utr = update.message.text.strip()
-
-    # Validate UTR format
-    if len(utr) < 6 or len(utr) > 40 or not any(c.isdigit() for c in utr):
-        await update.message.reply_text(
-            "Invalid UTR format.\n"
-            "Please send a valid UTR/Transaction ID (6-40 digits).",
-            reply_markup=main_menu_button())
-        return
-
-    token = context.user_data.get("pending_qr_token", "")
-    package_key = context.user_data.get("pending_package", "")
-    if not token or not package_key or package_key not in SUBSCRIPTION_PACKAGES:
-        await update.message.reply_text(
-            "No pending payment found.\nTap Buy Plan to start.",
-            reply_markup=main_menu_keyboard(is_admin=_is_admin(user.id)))
-        return
-
-    # Check if UTR already used
-    if db.is_utr_used(utr):
-        await update.message.reply_text(
-            "⚠️ This UTR has already been submitted.",
-            reply_markup=main_menu_button())
-        return
-
-    pkg = SUBSCRIPTION_PACKAGES[package_key]
-    await update.message.reply_text("🔎 Verifying your payment...", parse_mode="HTML")
-
-    # Try auto-verification via API
-    from config import VERIFY_URL, VERIFY_API_KEY
-    verified = False
-    if VERIFY_URL:
-        verified = await _verify_utr_via_api(utr, pkg["price"])
-
-    if verified:
-        # Auto-verified — activate subscription
-        db.mark_qr_used(token, user.id)
-        db.mark_utr_used(utr, user.id)
-        duration_hours = pkg["duration_hours"]
-        db.set_subscription(user.id, duration_hours)
-        tx_id = db.create_transaction(user.id, package_key, duration_hours, pkg["price"])
-        db.update_transaction_status(tx_id, "approved")
-        try:
-            uds.save_payment(user.id, user.username or user.first_name, package_key, pkg["price"], "approved", tx_id)
-        except Exception:
-            pass
-        # Cancel expiry job
-        if context.job_queue:
-            for job in context.job_queue.get_jobs_by_name(f"qr_{token}"):
-                job.schedule_removal()
-        context.user_data.pop("pending_qr_token", None)
-        context.user_data.pop("pending_package", None)
-        context.user_data.pop("awaiting_utr", None)
-        await update.message.reply_text(
-            f"✅ <b>Payment Verified!</b>\n\n"
-            f"Package: <b>{pkg['label']}</b>\n"
-            f"Amount: <b>Rs.{pkg['price']}</b>\n"
-            f"UTR: <code>{utr}</code>\n\n"
-            f"Subscription Activated!\n"
-            f"You now have unlimited lookups for {duration_hours}h!",
-            reply_markup=main_menu_keyboard(is_admin=_is_admin(user.id)),
-            parse_mode="HTML")
-        # Notify admin
-        for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=(
-                        f"💰 Auto-Verified Payment\n"
-                        f"User: {user.first_name} (#{user.id})\n"
-                        f"Package: {pkg['label']} Rs.{pkg['price']}\n"
-                        f"UTR: {utr}\n"
-                        f"✅ Activated immediately"),
-                    parse_mode="HTML")
-            except Exception:
-                pass
-    else:
-        # Not verified — send to admin for manual approval
-        db.mark_utr_used(utr, user.id)
-        tx_id = db.create_transaction(user.id, package_key, pkg["duration_hours"], pkg["price"])
-        try:
-            uds.save_payment(user.id, user.username or user.first_name, package_key, pkg["price"], "pending", tx_id)
-        except Exception:
-            pass
-        context.user_data.pop("awaiting_utr", None)
-        await update.message.reply_text(
-            f"📤 Payment submitted for verification.\n\n"
-            f"Package: <b>{pkg['label']}</b>\n"
-            f"Amount: <b>Rs.{pkg['price']}</b>\n"
-            f"UTR: <code>{utr}</code>\n"
-            f"TX: #{tx_id}\n\n"
-            f"Admin will verify shortly.",
-            reply_markup=main_menu_keyboard(is_admin=_is_admin(user.id)),
-            parse_mode="HTML")
-        # Send to all admins for manual approval
-        from keyboards import admin_approve_keyboard
-        for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=(
-                        f"💰 Payment Pending Verification\n"
-                        f"User: {user.first_name} (@{user.username or 'N/A'}) #{user.id}\n"
-                        f"Package: {pkg['label']} Rs.{pkg['price']}\n"
-                        f"UTR: <code>{utr}</code>\n"
-                        f"TX: #{tx_id}"),
-                    reply_markup=admin_approve_keyboard(tx_id),
-                    parse_mode="HTML")
-            except Exception:
-                pass
-
-
-async def _verify_utr_via_api(utr: str, amount: int) -> bool:
-    """Verify UTR via external payment verification API."""
-    from config import VERIFY_URL, VERIFY_API_KEY, UPI_ID
-    import httpx
-    headers = {"Content-Type": "application/json"}
-    if VERIFY_API_KEY:
-        headers["Authorization"] = f"Bearer {VERIFY_API_KEY}"
-    payload = {"utr": utr, "amount": amount, "upi_id": UPI_ID}
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(VERIFY_URL, json=payload, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                return bool(data.get("verified") is True)
-    except Exception as e:
-        logger.error(f"UTR verification API error: {e}")
-    return False
 
 
 USERS_PAGE_SIZE = 10
