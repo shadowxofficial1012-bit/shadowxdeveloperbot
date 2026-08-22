@@ -28,8 +28,7 @@ from handlers import (
     handle_parivahan_lookup,
     handle_hotx_lookup,
     handle_aadhaar_lookup,
-    handle_screenshot,
-    handle_qr_screenshot,
+    handle_utr_input,
     status_command,
     check_user_channels,
 )
@@ -89,11 +88,9 @@ async def handle_text(update: Update, context):
         if handled:
             return
 
-    if context.user_data.get("awaiting_screenshot"):
-        await update.message.reply_text(
-            "Please send a photo or document as the payment screenshot.",
-            parse_mode="HTML",
-        )
+    if context.user_data.get("awaiting_utr"):
+        context.user_data.pop("awaiting_utr", None)
+        await handle_utr_input(update, context)
         return
 
     if context.user_data.get("awaiting_redeem_code"):
@@ -305,17 +302,11 @@ async def handle_text(update: Update, context):
 
 
 async def handle_photo(update: Update, context):
-    if context.user_data.get("awaiting_qr_screenshot"):
-        await handle_qr_screenshot(update, context)
-    elif context.user_data.get("awaiting_screenshot"):
-        await handle_screenshot(update, context)
+    pass  # No photo handlers needed for UTR flow
 
 
 async def handle_document(update: Update, context):
-    if context.user_data.get("awaiting_qr_screenshot"):
-        await handle_qr_screenshot(update, context)
-    elif context.user_data.get("awaiting_screenshot"):
-        await handle_screenshot(update, context)
+    pass  # No document handlers needed for UTR flow
 
 
 def main():

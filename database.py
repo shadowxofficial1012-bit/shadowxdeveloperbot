@@ -211,6 +211,18 @@ def init_db():
         )
     """)
 
+    # UTR tracking table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS utr_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            utr TEXT UNIQUE NOT NULL,
+            user_id INTEGER,
+            is_used INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -647,6 +659,33 @@ def get_pending_qr_payments():
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
+
+
+# ==================== UTR FUNCTIONS ====================
+
+def is_utr_used(utr: str) -> bool:
+    """Check if a UTR has already been submitted."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id FROM utr_records WHERE utr = ?", (utr,))
+    row = c.fetchone()
+    conn.close()
+    return row is not None
+
+
+def mark_utr_used(utr: str, user_id: int):
+    """Mark a UTR as used."""
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO utr_records (utr, user_id, is_used) VALUES (?, ?, 1)",
+            (utr, user_id),
+        )
+    except sqlite3.IntegrityError:
+        pass  # UTR already exists
+    conn.commit()
+    conn.close()
 
 
 # ==================== BIDIRECTIONAL SYNC ====================

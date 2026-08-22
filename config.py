@@ -14,6 +14,12 @@ ADMIN_IDS = [int(x.strip()) for x in _admin_str.split(",") if x.strip()]
 UPI_ID = os.getenv("UPI_ID", "yourupi@paytm")
 UPI_NAME = os.getenv("UPI_NAME", "Your Name")
 
+# Payment Verification API (optional)
+# POST {"utr": "...", "amount": 100, "upi_id": "..."}
+# Returns: {"verified": true}
+VERIFY_URL = os.getenv("VERIFY_URL", "")
+VERIFY_API_KEY = os.getenv("VERIFY_API_KEY", "")
+
 # Subscription Packages
 SUBSCRIPTION_PACKAGES = {
     "daily": {"duration_hours": 24, "price": 20, "label": "1 Day Pack"},
