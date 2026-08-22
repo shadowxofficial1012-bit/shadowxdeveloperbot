@@ -296,11 +296,13 @@ async def handle_text(update: Update, context):
 
 
 async def handle_photo(update: Update, context):
-    pass  # No photo handlers needed for UTR flow
+    if context.user_data.get("awaiting_screenshot"):
+        await handle_screenshot(update, context)
 
 
 async def handle_document(update: Update, context):
-    pass  # No document handlers needed for UTR flow
+    if context.user_data.get("awaiting_screenshot"):
+        await handle_screenshot(update, context)
 
 
 def main():
@@ -332,15 +334,6 @@ def main():
 
     print("HathixShadow OSINT Bot starting...")
     print(f"Admin IDs: {ADMIN_IDS}")
-
-    # Start DFPAY webhook server
-    from config import WEBHOOK_URL
-    if WEBHOOK_URL:
-        from webhook import start_webhook_server
-        start_webhook_server(app.bot, loop)
-        print(f"DFPAY webhook server started")
-    else:
-        print("DFPAY webhook not configured (WEBHOOK_URL empty)")
 
     if app.job_queue:
         api_client.start_health_monitor(app.job_queue, bot=app.bot)

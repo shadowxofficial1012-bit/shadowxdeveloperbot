@@ -6,4 +6,3 @@ fpdf2>=2.8.0
 requests>=2.31.0
 curl_cffi>=0.7.0
 qrcode[pil]>=7.0
-flask>=3.0.0
